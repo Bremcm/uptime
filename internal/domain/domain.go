@@ -28,3 +28,10 @@ type Check struct {
 	Error      string
 	CheckedAt  time.Time
 }
+
+type User struct {
+	ID           int64
+	Email        string
+	PasswordHash string
+	CreatedAt    time.Time
+}
