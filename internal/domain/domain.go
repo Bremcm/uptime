@@ -6,11 +6,13 @@ package domain
 import "time"
 
 type Monitor struct {
+	ID              int64
 	URL             string
 	Name            string
 	UserID          int64
 	IntervalSeconds int
 	Enabled         bool
+	CreatedAt       time.Time
 }
 
 type CheckStatus string
@@ -21,6 +23,7 @@ const (
 )
 
 type Check struct {
+	ID         int64
 	MonitorID  int64
 	Status     CheckStatus
 	StatusCode int
