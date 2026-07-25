@@ -83,3 +83,41 @@ func (s *Store) CreateUser(ctx context.Context, email, passwordHash string) (dom
 	}
 	return u, nil
 }
+
+func (s *Store) EnabledMonitors(ctx context.Context) ([]domain.Monitor, error) {
+	const q = `
+		SELECT id, user_id, name, url, interval_seconds, enabled, created_at
+		FROM monitors
+		WHERE enabled = true`
+
+	rows, err := s.pool.Query(ctx, q)
+	if err != nil {
+		return nil, fmt.Errorf("query enabled monitors: %w", err)
+	}
+	defer rows.Close()
+
+	var monitors []domain.Monitor
+	for rows.Next() {
+		var m domain.Monitor
+		err := rows.Scan(&m.ID, &m.UserID, &m.Name, &m.URL,
+			&m.IntervalSeconds, &m.Enabled, &m.CreatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("scan monitor: %w", err)
+		}
+		monitors = append(monitors, m)
+	}
+	return monitors, rows.Err()
+}
+
+func (s *Store) SaveCheck(ctx context.Context, c domain.Check) error {
+	const q = `
+		INSERT INTO checks (monitor_id, status, status_code, latency_ms, error, checked_at)
+		VALUES ($1, $2, $3, $4, $5, $6)`
+
+	_, err := s.pool.Exec(ctx, q, c.MonitorID, c.Status, c.StatusCode,
+		c.LatencyMS, c.Error, c.CheckedAt)
+	if err != nil {
+		return fmt.Errorf("save check: %w", err)
+	}
+	return nil
+}
