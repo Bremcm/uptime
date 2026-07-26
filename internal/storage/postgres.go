@@ -121,3 +121,30 @@ func (s *Store) SaveCheck(ctx context.Context, c domain.Check) error {
 	}
 	return nil
 }
+
+func (s *Store) RecentChecks(ctx context.Context, monitorID int64, limit int) ([]domain.Check, error) {
+	const q = `
+		SELECT id, monitor_id, status, status_code, latency_ms, error, checked_at
+		FROM checks
+		WHERE monitor_id = $1
+		ORDER BY checked_at DESC
+		LIMIT $2`
+
+	rows, err := s.pool.Query(ctx, q, monitorID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("query checks: %w", err)
+	}
+	defer rows.Close()
+
+	var checks []domain.Check
+	for rows.Next() {
+		var c domain.Check
+		err := rows.Scan(&c.ID, &c.MonitorID, &c.Status, &c.StatusCode,
+			&c.LatencyMS, &c.Error, &c.CheckedAt)
+		if err != nil {
+			return nil, fmt.Errorf("scan check: %w", err)
+		}
+		checks = append(checks, c)
+	}
+	return checks, rows.Err()
+}

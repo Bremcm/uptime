@@ -31,7 +31,7 @@ func main() {
 	prober := monitor.NewProber(10 * time.Second)
 	scheduler := monitor.NewScheduler(store, prober, log, 20, 15*time.Second)
 
-	srv := httpserver.NewServer()
+	srv := httpserver.NewServer(store)
 	go func() {
 		log.Info("http server starting", "addr", ":8080")
 		if err := srv.Start(":8080"); err != nil {
