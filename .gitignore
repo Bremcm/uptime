@@ -7,3 +7,7 @@
 
 # Мусор macOS
 .DS_Store
+
+# Postman
+.postman/
+postman/
