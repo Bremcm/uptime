@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	httpserver "github.com/Bremcm/uptime/internal/http"
 	"github.com/Bremcm/uptime/internal/monitor"
 	"github.com/Bremcm/uptime/internal/storage"
 )
@@ -29,6 +30,14 @@ func main() {
 
 	prober := monitor.NewProber(10 * time.Second)
 	scheduler := monitor.NewScheduler(store, prober, log, 20, 15*time.Second)
+
+	srv := httpserver.NewServer()
+	go func() {
+		log.Info("http server starting", "addr", ":8080")
+		if err := srv.Start(":8080"); err != nil {
+			log.Error("http server stopped", "error", err)
+		}
+	}()
 
 	scheduler.Run(ctx)
 
