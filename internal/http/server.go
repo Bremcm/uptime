@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/Bremcm/uptime/internal/auth"
 	"github.com/Bremcm/uptime/internal/domain"
@@ -103,7 +104,7 @@ func (s *Server) handleCreateMonitor(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "could not create monitor")
 	}
 
-	return c.JSON(http.StatusCreated, m)
+	return c.JSON(http.StatusCreated, toMonitorResponse(m))
 }
 
 func (s *Server) handleListMonitors(c echo.Context) error {
@@ -111,7 +112,12 @@ func (s *Server) handleListMonitors(c echo.Context) error {
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "could not list monitors")
 	}
-	return c.JSON(http.StatusOK, monitors)
+
+	resp := make([]monitorResponse, 0, len(monitors))
+	for _, m := range monitors {
+		resp = append(resp, toMonitorResponse(m))
+	}
+	return c.JSON(http.StatusOK, resp)
 }
 
 func (s *Server) handleMonitorChecks(c echo.Context) error {
@@ -175,4 +181,24 @@ func (s *Server) handleLogin(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, authResponse{Token: token})
+}
+
+type monitorResponse struct {
+	ID              int64     `json:"id"`
+	Name            string    `json:"name"`
+	URL             string    `json:"url"`
+	IntervalSeconds int       `json:"interval_seconds"`
+	Enabled         bool      `json:"enabled"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
+func toMonitorResponse(m domain.Monitor) monitorResponse {
+	return monitorResponse{
+		ID:              m.ID,
+		Name:            m.Name,
+		URL:             m.URL,
+		IntervalSeconds: m.IntervalSeconds,
+		Enabled:         m.Enabled,
+		CreatedAt:       m.CreatedAt,
+	}
 }
