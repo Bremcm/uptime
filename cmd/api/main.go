@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Bremcm/uptime/internal/auth"
 	httpserver "github.com/Bremcm/uptime/internal/http"
 	"github.com/Bremcm/uptime/internal/monitor"
 	"github.com/Bremcm/uptime/internal/storage"
@@ -31,7 +32,9 @@ func main() {
 	prober := monitor.NewProber(10 * time.Second)
 	scheduler := monitor.NewScheduler(store, prober, log, 20, 15*time.Second)
 
-	srv := httpserver.NewServer(store)
+	// TODO: вынести секрет в переменную окружения перед деплоем
+	tokenManager := auth.NewTokenManager("super-secret-change-me", 24*time.Hour)
+	srv := httpserver.NewServer(store, tokenManager)
 	go func() {
 		log.Info("http server starting", "addr", ":8080")
 		if err := srv.Start(":8080"); err != nil {

@@ -2,11 +2,15 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/Bremcm/uptime/internal/domain"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+var ErrUserNotFound = errors.New("user not found")
 
 type Store struct {
 	pool *pgxpool.Pool
@@ -80,6 +84,23 @@ func (s *Store) CreateUser(ctx context.Context, email, passwordHash string) (dom
 	err := s.pool.QueryRow(ctx, q, email, passwordHash).Scan(&u.ID, &u.CreatedAt)
 	if err != nil {
 		return domain.User{}, fmt.Errorf("create user: %w", err)
+	}
+	return u, nil
+}
+
+func (s *Store) UserByEmail(ctx context.Context, email string) (domain.User, error) {
+	const q = `
+		SELECT id, email, password_hash, created_at
+		FROM users
+		WHERE email = $1`
+
+	var u domain.User
+	err := s.pool.QueryRow(ctx, q, email).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.CreatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.User{}, ErrUserNotFound
+		}
+		return domain.User{}, fmt.Errorf("user by email: %w", err)
 	}
 	return u, nil
 }
