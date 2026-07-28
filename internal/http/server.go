@@ -2,12 +2,14 @@ package http
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/Bremcm/uptime/internal/auth"
 	"github.com/Bremcm/uptime/internal/domain"
+	"github.com/Bremcm/uptime/internal/storage"
 	"github.com/labstack/echo/v4"
 )
 
@@ -17,6 +19,7 @@ type store interface {
 	CreateMonitor(ctx context.Context, m domain.Monitor) (domain.Monitor, error)
 	MonitorsByUser(ctx context.Context, userID int64) ([]domain.Monitor, error)
 	RecentChecks(ctx context.Context, monitorID int64, limit int) ([]domain.Check, error)
+	MonitorByID(ctx context.Context, id int64) (domain.Monitor, error)
 }
 
 type loginRequest struct {
@@ -124,6 +127,17 @@ func (s *Server) handleMonitorChecks(c echo.Context) error {
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid monitor id")
+	}
+
+	monitor, err := s.store.MonitorByID(c.Request().Context(), id)
+	if err != nil {
+		if errors.Is(err, storage.ErrMonitorNotFound) {
+			return echo.NewHTTPError(http.StatusNotFound, "monitor not found")
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, "could not load monitor")
+	}
+	if monitor.UserID != userIDFrom(c) {
+		return echo.NewHTTPError(http.StatusNotFound, "monitor not found")
 	}
 
 	checks, err := s.store.RecentChecks(c.Request().Context(), id, 50)

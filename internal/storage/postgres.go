@@ -11,6 +11,7 @@ import (
 )
 
 var ErrUserNotFound = errors.New("user not found")
+var ErrMonitorNotFound = errors.New("monitor not found")
 
 type Store struct {
 	pool *pgxpool.Pool
@@ -72,6 +73,24 @@ func (s *Store) MonitorsByUser(ctx context.Context, userID int64) ([]domain.Moni
 		monitors = append(monitors, m)
 	}
 	return monitors, rows.Err()
+}
+
+func (s *Store) MonitorByID(ctx context.Context, id int64) (domain.Monitor, error) {
+	const q = `
+		SELECT id, user_id, name, url, interval_seconds, enabled, created_at
+		FROM monitors
+		WHERE id = $1`
+
+	var m domain.Monitor
+	err := s.pool.QueryRow(ctx, q, id).Scan(&m.ID, &m.UserID, &m.Name, &m.URL,
+		&m.IntervalSeconds, &m.Enabled, &m.CreatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.Monitor{}, ErrMonitorNotFound
+		}
+		return domain.Monitor{}, fmt.Errorf("monitor by id: %w", err)
+	}
+	return m, nil
 }
 
 func (s *Store) CreateUser(ctx context.Context, email, passwordHash string) (domain.User, error) {
