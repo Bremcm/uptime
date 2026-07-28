@@ -163,7 +163,10 @@ func (s *Server) handleRegister(c echo.Context) error {
 
 	user, err := s.store.CreateUser(c.Request().Context(), req.Email, hash)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusConflict, "could not create user (email may be taken)")
+		if errors.Is(err, storage.ErrEmailTaken) {
+			return echo.NewHTTPError(http.StatusConflict, "email already registered")
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, "could not create user")
 	}
 
 	token, err := s.tokens.Generate(user.ID)

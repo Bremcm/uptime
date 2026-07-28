@@ -7,9 +7,11 @@ import (
 
 	"github.com/Bremcm/uptime/internal/domain"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+var ErrEmailTaken = errors.New("email already taken")
 var ErrUserNotFound = errors.New("user not found")
 var ErrMonitorNotFound = errors.New("monitor not found")
 
@@ -102,6 +104,10 @@ func (s *Store) CreateUser(ctx context.Context, email, passwordHash string) (dom
 	u := domain.User{Email: email, PasswordHash: passwordHash}
 	err := s.pool.QueryRow(ctx, q, email, passwordHash).Scan(&u.ID, &u.CreatedAt)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return domain.User{}, ErrEmailTaken
+		}
 		return domain.User{}, fmt.Errorf("create user: %w", err)
 	}
 	return u, nil
