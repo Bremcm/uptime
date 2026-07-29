@@ -36,7 +36,8 @@ func main() {
 	log.Info("connected to database")
 
 	prober := monitor.NewProber(10 * time.Second)
-	scheduler := monitor.NewScheduler(store, prober, log, cfg.SchedulerWorkers, cfg.SchedulerTick)
+	detector := monitor.NewDetector(store, log, 3)
+	scheduler := monitor.NewScheduler(store, prober, detector, log, cfg.SchedulerWorkers, cfg.SchedulerTick)
 
 	tokenManager := auth.NewTokenManager(cfg.JWTSecret, 24*time.Hour)
 	srv := httpserver.NewServer(store, tokenManager)

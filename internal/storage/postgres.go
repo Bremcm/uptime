@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+var ErrIncidentNotFound = errors.New("incident not found")
 var ErrEmailTaken = errors.New("email already taken")
 var ErrUserNotFound = errors.New("user not found")
 var ErrMonitorNotFound = errors.New("monitor not found")
@@ -193,4 +194,48 @@ func (s *Store) RecentChecks(ctx context.Context, monitorID int64, limit int) ([
 		checks = append(checks, c)
 	}
 	return checks, rows.Err()
+}
+
+func (s *Store) OpenIncidentByMonitor(ctx context.Context, monitorID int64) (domain.Incident, error) {
+	const q = `
+		SELECT id, monitor_id, started_at, resolved_at
+		FROM incidents
+		WHERE monitor_id = $1 AND resolved_at IS NULL`
+
+	var inc domain.Incident
+	err := s.pool.QueryRow(ctx, q, monitorID).Scan(&inc.ID, &inc.MonitorID, &inc.StartedAt, &inc.ResolvedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.Incident{}, ErrIncidentNotFound
+		}
+		return domain.Incident{}, fmt.Errorf("open incident by monitor: %w", err)
+	}
+	return inc, nil
+}
+
+func (s *Store) CreateIncident(ctx context.Context, monitorID int64) (domain.Incident, error) {
+	const q = `
+		INSERT INTO incidents (monitor_id)
+		VALUES ($1)
+		RETURNING id, monitor_id, started_at, resolved_at`
+
+	var inc domain.Incident
+	err := s.pool.QueryRow(ctx, q, monitorID).Scan(&inc.ID, &inc.MonitorID, &inc.StartedAt, &inc.ResolvedAt)
+	if err != nil {
+		return domain.Incident{}, fmt.Errorf("create incident: %w", err)
+	}
+	return inc, nil
+}
+
+func (s *Store) ResolveIncident(ctx context.Context, incidentID int64) error {
+	const q = `
+		UPDATE incidents
+		SET resolved_at = now()
+		WHERE id = $1 AND resolved_at IS NULL`
+
+	_, err := s.pool.Exec(ctx, q, incidentID)
+	if err != nil {
+		return fmt.Errorf("resolve incident: %w", err)
+	}
+	return nil
 }

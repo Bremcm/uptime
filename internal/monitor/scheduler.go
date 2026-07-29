@@ -17,15 +17,17 @@ type checkStore interface {
 type Scheduler struct {
 	store    checkStore
 	prober   *Prober
+	detector *Detector
 	log      *slog.Logger
 	workers  int
 	interval time.Duration
 }
 
-func NewScheduler(store checkStore, prober *Prober, log *slog.Logger, workers int, interval time.Duration) *Scheduler {
+func NewScheduler(store checkStore, prober *Prober, detector *Detector, log *slog.Logger, workers int, interval time.Duration) *Scheduler {
 	return &Scheduler{
 		store:    store,
 		prober:   prober,
+		detector: detector,
 		log:      log,
 		workers:  workers,
 		interval: interval,
@@ -70,7 +72,9 @@ func (s *Scheduler) runOnce(ctx context.Context) {
 				check := s.prober.Probe(ctx, m)
 				if err := s.store.SaveCheck(ctx, check); err != nil {
 					s.log.Error("failed to save check", "monitor_id", m.ID, "error", err)
+					continue
 				}
+				s.detector.Process(ctx, check)
 			}
 		}()
 	}

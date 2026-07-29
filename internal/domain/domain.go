@@ -38,3 +38,14 @@ type User struct {
 	PasswordHash string
 	CreatedAt    time.Time
 }
+
+type Incident struct {
+	ID         int64
+	MonitorID  int64
+	StartedAt  time.Time
+	ResolvedAt *time.Time
+}
+
+func (i Incident) IsOpen() bool {
+	return i.ResolvedAt == nil
+}
