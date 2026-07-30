@@ -12,6 +12,7 @@ import (
 	"github.com/Bremcm/uptime/internal/config"
 	httpserver "github.com/Bremcm/uptime/internal/http"
 	"github.com/Bremcm/uptime/internal/monitor"
+	"github.com/Bremcm/uptime/internal/notifier"
 	"github.com/Bremcm/uptime/internal/storage"
 )
 
@@ -36,7 +37,8 @@ func main() {
 	log.Info("connected to database")
 
 	prober := monitor.NewProber(10 * time.Second)
-	detector := monitor.NewDetector(store, log, 3)
+	telegram := notifier.NewTelegram(cfg.TelegramToken, cfg.TelegramChatID)
+	detector := monitor.NewDetector(store, telegram, log, 3)
 	scheduler := monitor.NewScheduler(store, prober, detector, log, cfg.SchedulerWorkers, cfg.SchedulerTick)
 
 	tokenManager := auth.NewTokenManager(cfg.JWTSecret, 24*time.Hour)
