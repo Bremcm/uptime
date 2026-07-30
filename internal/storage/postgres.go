@@ -116,17 +116,34 @@ func (s *Store) CreateUser(ctx context.Context, email, passwordHash string) (dom
 
 func (s *Store) UserByEmail(ctx context.Context, email string) (domain.User, error) {
 	const q = `
-		SELECT id, email, password_hash, created_at
+		SELECT id, email, password_hash, telegram_chat_id, created_at
 		FROM users
 		WHERE email = $1`
 
 	var u domain.User
-	err := s.pool.QueryRow(ctx, q, email).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.CreatedAt)
+	err := s.pool.QueryRow(ctx, q, email).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.TelegramChatID, &u.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.User{}, ErrUserNotFound
 		}
 		return domain.User{}, fmt.Errorf("user by email: %w", err)
+	}
+	return u, nil
+}
+
+func (s *Store) UserByID(ctx context.Context, id int64) (domain.User, error) {
+	const q = `
+		SELECT id, email, password_hash, telegram_chat_id, created_at
+		FROM users
+		WHERE id = $1`
+
+	var u domain.User
+	err := s.pool.QueryRow(ctx, q, id).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.TelegramChatID, &u.CreatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.User{}, ErrUserNotFound
+		}
+		return domain.User{}, fmt.Errorf("user by id: %w", err)
 	}
 	return u, nil
 }
@@ -236,6 +253,15 @@ func (s *Store) ResolveIncident(ctx context.Context, incidentID int64) error {
 	_, err := s.pool.Exec(ctx, q, incidentID)
 	if err != nil {
 		return fmt.Errorf("resolve incident: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) UpdateUserTelegramChatID(ctx context.Context, userID int64, chatID string) error {
+	const q = `UPDATE users SET telegram_chat_id = $1 WHERE id = $2`
+	_, err := s.pool.Exec(ctx, q, chatID, userID)
+	if err != nil {
+		return fmt.Errorf("update telegram chat id: %w", err)
 	}
 	return nil
 }

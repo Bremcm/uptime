@@ -20,6 +20,7 @@ type store interface {
 	MonitorsByUser(ctx context.Context, userID int64) ([]domain.Monitor, error)
 	RecentChecks(ctx context.Context, monitorID int64, limit int) ([]domain.Check, error)
 	MonitorByID(ctx context.Context, id int64) (domain.Monitor, error)
+	UpdateUserTelegramChatID(ctx context.Context, userID int64, chatID string) error
 }
 
 type loginRequest struct {
@@ -62,6 +63,7 @@ func (s *Server) routes() {
 	api.POST("/monitors", s.handleCreateMonitor)
 	api.GET("/monitors", s.handleListMonitors)
 	api.GET("/monitors/:id/checks", s.handleMonitorChecks)
+	api.PUT("/me/telegram", s.handleSetTelegram)
 }
 
 func (s *Server) Start(addr string) error {
@@ -218,4 +220,23 @@ func toMonitorResponse(m domain.Monitor) monitorResponse {
 		Enabled:         m.Enabled,
 		CreatedAt:       m.CreatedAt,
 	}
+}
+
+type setTelegramRequest struct {
+	ChatID string `json:"chat_id"`
+}
+
+func (s *Server) handleSetTelegram(c echo.Context) error {
+	var req setTelegramRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	if req.ChatID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "chat_id is required")
+	}
+
+	if err := s.store.UpdateUserTelegramChatID(c.Request().Context(), userIDFrom(c), req.ChatID); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "could not update telegram")
+	}
+	return c.NoContent(http.StatusNoContent)
 }

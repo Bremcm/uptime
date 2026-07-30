@@ -15,6 +15,7 @@ type incidentStore interface {
 	CreateIncident(ctx context.Context, monitorID int64) (domain.Incident, error)
 	ResolveIncident(ctx context.Context, incidentID int64) error
 	MonitorByID(ctx context.Context, id int64) (domain.Monitor, error)
+	UserByID(ctx context.Context, id int64) (domain.User, error)
 }
 
 type Detector struct {
@@ -88,7 +89,17 @@ func (d *Detector) notify(ctx context.Context, monitorID int64, incident domain.
 		d.log.Error("load monitor for notification", "monitor", monitorID, "error", err)
 		return
 	}
-	if err := d.notifier.NotifyIncident(ctx, monitor, incident); err != nil {
+
+	user, err := d.store.UserByID(ctx, monitor.UserID)
+	if err != nil {
+		d.log.Error("load user for notification", "user", monitor.UserID, "error", err)
+		return
+	}
+	if user.TelegramChatID == "" {
+		return
+	}
+
+	if err := d.notifier.NotifyIncident(ctx, user.TelegramChatID, monitor, incident); err != nil {
 		d.log.Error("send notification", "monitor", monitorID, "error", err)
 	}
 }

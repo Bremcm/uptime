@@ -7,5 +7,5 @@ import (
 )
 
 type Notifier interface {
-	NotifyIncident(ctx context.Context, monitor domain.Monitor, incident domain.Incident) error
+	NotifyIncident(ctx context.Context, chatID string, monitor domain.Monitor, incident domain.Incident) error
 }

@@ -13,19 +13,17 @@ import (
 
 type Telegram struct {
 	token  string
-	chatID string
 	client *http.Client
 }
 
-func NewTelegram(token, chatID string) *Telegram {
+func NewTelegram(token string) *Telegram {
 	return &Telegram{
 		token:  token,
-		chatID: chatID,
 		client: &http.Client{Timeout: 10 * time.Second},
 	}
 }
 
-func (t *Telegram) NotifyIncident(ctx context.Context, monitor domain.Monitor, incident domain.Incident) error {
+func (t *Telegram) NotifyIncident(ctx context.Context, chatID string, monitor domain.Monitor, incident domain.Incident) error {
 	var text string
 	if incident.IsOpen() {
 		text = fmt.Sprintf("🔴 %s is DOWN\n%s\nsince %s",
@@ -36,14 +34,14 @@ func (t *Telegram) NotifyIncident(ctx context.Context, monitor domain.Monitor, i
 			monitor.Name, monitor.URL, duration)
 	}
 
-	return t.send(ctx, text)
+	return t.send(ctx, chatID, text)
 }
 
-func (t *Telegram) send(ctx context.Context, text string) error {
+func (t *Telegram) send(ctx context.Context, chatID, text string) error {
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", t.token)
 
 	payload := map[string]string{
-		"chat_id": t.chatID,
+		"chat_id": chatID,
 		"text":    text,
 	}
 	body, err := json.Marshal(payload)

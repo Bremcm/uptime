@@ -10,13 +10,14 @@ import (
 )
 
 type Config struct {
-	DatabaseURL      string
-	JWTSecret        string
-	HTTPAddr         string
-	TelegramToken    string
-	TelegramChatID   string
-	SchedulerWorkers int
-	SchedulerTick    time.Duration
+	DatabaseURL       string
+	JWTSecret         string
+	HTTPAddr          string
+	TelegramToken     string
+	TelegramChatID    string
+	SchedulerWorkers  int
+	DetectorThreshold int
+	SchedulerTick     time.Duration
 }
 
 func Load() (*Config, error) {
@@ -36,6 +37,7 @@ func Load() (*Config, error) {
 	}
 
 	cfg.SchedulerWorkers = getEnvInt("SCHEDULER_WORKERS", 20)
+	cfg.DetectorThreshold = getEnvInt("DETECTOR_THRESHOLD", 3)
 	cfg.SchedulerTick = time.Duration(getEnvInt("SCHEDULER_TICK_SECONDS", 15)) * time.Second
 
 	cfg.TelegramToken = os.Getenv("TELEGRAM_TOKEN")

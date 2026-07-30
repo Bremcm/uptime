@@ -37,8 +37,8 @@ func main() {
 	log.Info("connected to database")
 
 	prober := monitor.NewProber(10 * time.Second)
-	telegram := notifier.NewTelegram(cfg.TelegramToken, cfg.TelegramChatID)
-	detector := monitor.NewDetector(store, telegram, log, 3)
+	telegram := notifier.NewTelegram(cfg.TelegramToken)
+	detector := monitor.NewDetector(store, telegram, log, cfg.DetectorThreshold)
 	scheduler := monitor.NewScheduler(store, prober, detector, log, cfg.SchedulerWorkers, cfg.SchedulerTick)
 
 	tokenManager := auth.NewTokenManager(cfg.JWTSecret, 24*time.Hour)
