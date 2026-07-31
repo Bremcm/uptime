@@ -10,9 +10,9 @@ import (
 
 	"github.com/Bremcm/uptime/internal/auth"
 	"github.com/Bremcm/uptime/internal/config"
+	"github.com/Bremcm/uptime/internal/events"
 	httpserver "github.com/Bremcm/uptime/internal/http"
 	"github.com/Bremcm/uptime/internal/monitor"
-	"github.com/Bremcm/uptime/internal/notifier"
 	"github.com/Bremcm/uptime/internal/storage"
 )
 
@@ -36,11 +36,14 @@ func main() {
 	defer store.Close()
 	log.Info("connected to database")
 
-	prober := monitor.NewProber(10 * time.Second)
-	telegram := notifier.NewTelegram(cfg.TelegramToken)
-	detector := monitor.NewDetector(store, telegram, log, cfg.DetectorThreshold)
-	scheduler := monitor.NewScheduler(store, prober, detector, log, cfg.SchedulerWorkers, cfg.SchedulerTick)
+	producer, err := events.NewProducer(cfg.KafkaBrokers)
+	if err != nil {
+		log.Error("failed to create producer", "error", err)
+		os.Exit(1)
+	}
+	defer producer.Close()
 
+	scheduler := monitor.NewScheduler(store, producer, cfg.ChecksTopic, log, cfg.SchedulerTick)
 	tokenManager := auth.NewTokenManager(cfg.JWTSecret, 24*time.Hour)
 	srv := httpserver.NewServer(store, tokenManager)
 	go func() {

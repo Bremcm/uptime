@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -15,6 +16,8 @@ type Config struct {
 	HTTPAddr          string
 	TelegramToken     string
 	TelegramChatID    string
+	KafkaBrokers      []string
+	ChecksTopic       string
 	SchedulerWorkers  int
 	DetectorThreshold int
 	SchedulerTick     time.Duration
@@ -39,7 +42,9 @@ func Load() (*Config, error) {
 	cfg.SchedulerWorkers = getEnvInt("SCHEDULER_WORKERS", 20)
 	cfg.DetectorThreshold = getEnvInt("DETECTOR_THRESHOLD", 3)
 	cfg.SchedulerTick = time.Duration(getEnvInt("SCHEDULER_TICK_SECONDS", 15)) * time.Second
-
+	brokers := getEnv("KAFKA_BROKERS", "localhost:9092")
+	cfg.KafkaBrokers = strings.Split(brokers, ",")
+	cfg.ChecksTopic = getEnv("CHECKS_TOPIC", "checks")
 	cfg.TelegramToken = os.Getenv("TELEGRAM_TOKEN")
 	cfg.TelegramChatID = os.Getenv("TELEGRAM_CHAT_ID")
 

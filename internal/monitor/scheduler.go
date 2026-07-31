@@ -3,34 +3,35 @@ package monitor
 import (
 	"context"
 	"log/slog"
-	"sync"
 	"time"
 
 	"github.com/Bremcm/uptime/internal/domain"
+	"github.com/Bremcm/uptime/internal/events"
 )
 
-type checkStore interface {
+type jobPublisher interface {
+	PublishCheckJob(ctx context.Context, topic string, job events.CheckJob) error
+}
+
+type monitorLister interface {
 	EnabledMonitors(ctx context.Context) ([]domain.Monitor, error)
-	SaveCheck(ctx context.Context, c domain.Check) error
 }
 
 type Scheduler struct {
-	store    checkStore
-	prober   *Prober
-	detector *Detector
-	log      *slog.Logger
-	workers  int
-	interval time.Duration
+	store     monitorLister
+	publisher jobPublisher
+	topic     string
+	log       *slog.Logger
+	interval  time.Duration
 }
 
-func NewScheduler(store checkStore, prober *Prober, detector *Detector, log *slog.Logger, workers int, interval time.Duration) *Scheduler {
+func NewScheduler(store monitorLister, publisher jobPublisher, topic string, log *slog.Logger, interval time.Duration) *Scheduler {
 	return &Scheduler{
-		store:    store,
-		prober:   prober,
-		detector: detector,
-		log:      log,
-		workers:  workers,
-		interval: interval,
+		store:     store,
+		publisher: publisher,
+		topic:     topic,
+		log:       log,
+		interval:  interval,
 	}
 }
 
@@ -38,8 +39,7 @@ func (s *Scheduler) Run(ctx context.Context) {
 	ticker := time.NewTicker(s.interval)
 	defer ticker.Stop()
 
-	s.log.Info("scheduler started", "workers", s.workers, "interval", s.interval)
-
+	s.log.Info("scheduler started", "interval", s.interval, "topic", s.topic)
 	for {
 		select {
 		case <-ctx.Done():
@@ -57,32 +57,11 @@ func (s *Scheduler) runOnce(ctx context.Context) {
 		s.log.Error("failed to load monitors", "error", err)
 		return
 	}
-	if len(monitors) == 0 {
-		return
-	}
-
-	jobs := make(chan domain.Monitor)
-	var wg sync.WaitGroup
-
-	for i := 0; i < s.workers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for m := range jobs {
-				check := s.prober.Probe(ctx, m)
-				if err := s.store.SaveCheck(ctx, check); err != nil {
-					s.log.Error("failed to save check", "monitor_id", m.ID, "error", err)
-					continue
-				}
-				s.detector.Process(ctx, check)
-			}
-		}()
-	}
 
 	for _, m := range monitors {
-		jobs <- m
+		job := events.CheckJob{MonitorID: m.ID, URL: m.URL}
+		if err := s.publisher.PublishCheckJob(ctx, s.topic, job); err != nil {
+			s.log.Error("failed to publish check job", "monitor", m.ID, "error", err)
+		}
 	}
-	close(jobs)
-
-	wg.Wait()
 }
