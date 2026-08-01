@@ -12,8 +12,6 @@ import (
 	"github.com/Bremcm/uptime/internal/domain"
 	"github.com/Bremcm/uptime/internal/events"
 	"github.com/Bremcm/uptime/internal/monitor"
-	"github.com/Bremcm/uptime/internal/notifier"
-	"github.com/Bremcm/uptime/internal/storage"
 )
 
 func main() {
@@ -28,16 +26,14 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	store, err := storage.New(ctx, cfg.DatabaseURL)
+	prober := monitor.NewProber(10 * time.Second)
+
+	producer, err := events.NewProducer(cfg.KafkaBrokers)
 	if err != nil {
-		log.Error("failed to connect to database", "error", err)
+		log.Error("failed to create producer", "error", err)
 		os.Exit(1)
 	}
-	defer store.Close()
-
-	prober := monitor.NewProber(10 * time.Second)
-	telegram := notifier.NewTelegram(cfg.TelegramToken)
-	detector := monitor.NewDetector(store, telegram, log, cfg.DetectorThreshold)
+	defer producer.Close()
 
 	consumer, err := events.NewConsumer(cfg.KafkaBrokers, cfg.ChecksTopic, "checkers")
 	if err != nil {
@@ -46,16 +42,24 @@ func main() {
 	}
 	defer consumer.Close()
 
-	log.Info("checker started", "topic", cfg.ChecksTopic)
+	log.Info("checker started", "in", cfg.ChecksTopic, "out", cfg.ResultsTopic)
 
 	err = consumer.ConsumeCheckJobs(ctx, func(ctx context.Context, job events.CheckJob) error {
-		m := domainMonitorFromJob(job)
+		m := domain.Monitor{ID: job.MonitorID, URL: job.URL}
 		check := prober.Probe(ctx, m)
-		if err := store.SaveCheck(ctx, check); err != nil {
-			log.Error("failed to save check", "monitor", job.MonitorID, "error", err)
+
+		result := events.CheckResult{
+			MonitorID:  check.MonitorID,
+			Status:     string(check.Status),
+			StatusCode: check.StatusCode,
+			LatencyMS:  check.LatencyMS,
+			Error:      check.Error,
+			CheckedAt:  check.CheckedAt,
+		}
+		if err := producer.PublishCheckResult(ctx, cfg.ResultsTopic, result); err != nil {
+			log.Error("failed to publish result", "monitor", job.MonitorID, "error", err)
 			return err
 		}
-		detector.Process(ctx, check)
 		return nil
 	})
 	if err != nil && ctx.Err() == nil {
@@ -63,11 +67,4 @@ func main() {
 	}
 
 	log.Info("checker shutdown complete")
-}
-
-func domainMonitorFromJob(job events.CheckJob) domain.Monitor {
-	return domain.Monitor{
-		ID:  job.MonitorID,
-		URL: job.URL,
-	}
 }

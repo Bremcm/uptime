@@ -50,3 +50,25 @@ func (c *Consumer) ConsumeCheckJobs(ctx context.Context, handle func(context.Con
 		})
 	}
 }
+
+func (c *Consumer) ConsumeCheckResults(ctx context.Context, handle func(context.Context, CheckResult) error) error {
+	for {
+		fetches := c.client.PollFetches(ctx)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if errs := fetches.Errors(); len(errs) > 0 {
+			return fmt.Errorf("poll fetches: %v", errs)
+		}
+
+		fetches.EachRecord(func(r *kgo.Record) {
+			var result CheckResult
+			if err := json.Unmarshal(r.Value, &result); err != nil {
+				return
+			}
+			if err := handle(ctx, result); err != nil {
+				return
+			}
+		})
+	}
+}

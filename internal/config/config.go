@@ -18,6 +18,7 @@ type Config struct {
 	TelegramChatID    string
 	KafkaBrokers      []string
 	ChecksTopic       string
+	ResultsTopic      string
 	SchedulerWorkers  int
 	DetectorThreshold int
 	SchedulerTick     time.Duration
@@ -45,6 +46,7 @@ func Load() (*Config, error) {
 	brokers := getEnv("KAFKA_BROKERS", "localhost:9092")
 	cfg.KafkaBrokers = strings.Split(brokers, ",")
 	cfg.ChecksTopic = getEnv("CHECKS_TOPIC", "checks")
+	cfg.ResultsTopic = getEnv("RESULTS_TOPIC", "check-results")
 	cfg.TelegramToken = os.Getenv("TELEGRAM_TOKEN")
 	cfg.TelegramChatID = os.Getenv("TELEGRAM_CHAT_ID")
 
