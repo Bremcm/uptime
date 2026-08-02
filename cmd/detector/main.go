@@ -11,7 +11,6 @@ import (
 	"github.com/Bremcm/uptime/internal/domain"
 	"github.com/Bremcm/uptime/internal/events"
 	"github.com/Bremcm/uptime/internal/monitor"
-	"github.com/Bremcm/uptime/internal/notifier"
 	"github.com/Bremcm/uptime/internal/storage"
 )
 
@@ -34,9 +33,14 @@ func main() {
 	}
 	defer store.Close()
 
-	telegram := notifier.NewTelegram(cfg.TelegramToken)
-	detector := monitor.NewDetector(store, telegram, log, cfg.DetectorThreshold)
+	producer, err := events.NewProducer(cfg.KafkaBrokers)
+	if err != nil {
+		log.Error("failed to create producer", "error", err)
+		os.Exit(1)
+	}
+	defer producer.Close()
 
+	detector := monitor.NewDetector(store, producer, cfg.IncidentsTopic, log, cfg.DetectorThreshold)
 	consumer, err := events.NewConsumer(cfg.KafkaBrokers, cfg.ResultsTopic, "detectors")
 	if err != nil {
 		log.Error("failed to create consumer", "error", err)

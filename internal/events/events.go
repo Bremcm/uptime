@@ -15,3 +15,13 @@ type CheckResult struct {
 	Error      string    `json:"error"`
 	CheckedAt  time.Time `json:"checked_at"`
 }
+
+type IncidentEvent struct {
+	IncidentID  int64      `json:"incident_id"`
+	MonitorName string     `json:"monitor_name"`
+	MonitorURL  string     `json:"monitor_url"`
+	ChatID      string     `json:"chat_id"`
+	Resolved    bool       `json:"resolved"`
+	StartedAt   time.Time  `json:"started_at"`
+	ResolvedAt  *time.Time `json:"resolved_at"`
+}

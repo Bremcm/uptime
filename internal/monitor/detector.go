@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/Bremcm/uptime/internal/domain"
+	"github.com/Bremcm/uptime/internal/events"
 	"github.com/Bremcm/uptime/internal/storage"
 )
 
@@ -18,17 +19,23 @@ type incidentStore interface {
 	UserByID(ctx context.Context, id int64) (domain.User, error)
 }
 
+type incidentPublisher interface {
+	PublishIncident(ctx context.Context, topic string, event events.IncidentEvent) error
+}
+
 type Detector struct {
 	store     incidentStore
-	notifier  Notifier
+	publisher incidentPublisher
+	topic     string
 	log       *slog.Logger
 	threshold int
 }
 
-func NewDetector(store incidentStore, notifier Notifier, log *slog.Logger, threshold int) *Detector {
+func NewDetector(store incidentStore, publisher incidentPublisher, topic string, log *slog.Logger, threshold int) *Detector {
 	return &Detector{
 		store:     store,
-		notifier:  notifier,
+		publisher: publisher,
+		topic:     topic,
 		log:       log,
 		threshold: threshold,
 	}
@@ -99,7 +106,16 @@ func (d *Detector) notify(ctx context.Context, monitorID int64, incident domain.
 		return
 	}
 
-	if err := d.notifier.NotifyIncident(ctx, user.TelegramChatID, monitor, incident); err != nil {
-		d.log.Error("send notification", "monitor", monitorID, "error", err)
+	event := events.IncidentEvent{
+		IncidentID:  incident.ID,
+		MonitorName: monitor.Name,
+		MonitorURL:  monitor.URL,
+		ChatID:      user.TelegramChatID,
+		Resolved:    !incident.IsOpen(),
+		StartedAt:   incident.StartedAt,
+		ResolvedAt:  incident.ResolvedAt,
+	}
+	if err := d.publisher.PublishIncident(ctx, d.topic, event); err != nil {
+		d.log.Error("publish incident event", "monitor", monitorID, "error", err)
 	}
 }

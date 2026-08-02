@@ -61,3 +61,21 @@ func (p *Producer) PublishCheckResult(ctx context.Context, topic string, result 
 	}
 	return nil
 }
+
+func (p *Producer) PublishIncident(ctx context.Context, topic string, event IncidentEvent) error {
+	value, err := json.Marshal(event)
+	if err != nil {
+		return fmt.Errorf("marshal incident event: %w", err)
+	}
+
+	record := &kgo.Record{
+		Topic: topic,
+		Key:   []byte(fmt.Sprintf("%d", event.IncidentID)),
+		Value: value,
+	}
+
+	if err := p.client.ProduceSync(ctx, record).FirstErr(); err != nil {
+		return fmt.Errorf("produce incident event: %w", err)
+	}
+	return nil
+}

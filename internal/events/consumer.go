@@ -72,3 +72,25 @@ func (c *Consumer) ConsumeCheckResults(ctx context.Context, handle func(context.
 		})
 	}
 }
+
+func (c *Consumer) ConsumeIncidents(ctx context.Context, handle func(context.Context, IncidentEvent) error) error {
+	for {
+		fetches := c.client.PollFetches(ctx)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if errs := fetches.Errors(); len(errs) > 0 {
+			return fmt.Errorf("poll fetches: %v", errs)
+		}
+
+		fetches.EachRecord(func(r *kgo.Record) {
+			var event IncidentEvent
+			if err := json.Unmarshal(r.Value, &event); err != nil {
+				return
+			}
+			if err := handle(ctx, event); err != nil {
+				return
+			}
+		})
+	}
+}

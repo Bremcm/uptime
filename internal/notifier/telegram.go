@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Bremcm/uptime/internal/domain"
+	"github.com/Bremcm/uptime/internal/events"
 )
 
 type Telegram struct {
@@ -65,4 +66,18 @@ func (t *Telegram) send(ctx context.Context, chatID, text string) error {
 		return fmt.Errorf("telegram returned status %d", resp.StatusCode)
 	}
 	return nil
+}
+
+func (t *Telegram) NotifyFromEvent(ctx context.Context, event events.IncidentEvent) error {
+	var text string
+	if !event.Resolved {
+		text = fmt.Sprintf("🔴 %s is DOWN\n%s\nsince %s",
+			event.MonitorName, event.MonitorURL, event.StartedAt.Format("15:04:05"))
+	} else {
+		duration := event.ResolvedAt.Sub(event.StartedAt).Round(time.Second)
+		text = fmt.Sprintf("🟢 %s is UP again\n%s\nwas down for %s",
+			event.MonitorName, event.MonitorURL, duration)
+	}
+
+	return t.send(ctx, event.ChatID, text)
 }
