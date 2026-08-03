@@ -11,3 +11,12 @@
 # Postman
 .postman/
 postman/
+
+# Python
+ai-service/venv/
+__pycache__/
+*.pyc
+
+.vscode
+
+probe.py

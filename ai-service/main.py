@@ -1,6 +1,13 @@
+import os
 import json
 from kafka import KafkaConsumer
+from dotenv import load_dotenv
 from llm import explain_incident
+from telegram import send_message
+
+
+load_dotenv(dotenv_path="../.env")
+TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 
 
 def main():
@@ -22,8 +29,12 @@ def main():
         try:
             explanation = explain_incident(event)
             print(explanation)
+
+            chat_id = event["chat_id"]
+            if chat_id:
+                send_message(TELEGRAM_TOKEN, chat_id, f"🤖 {explanation}")
         except Exception as e:
-            print(f"failed to get explanation: {e}")
+            print(f"failed to process incident: {e}")
 
 
 if __name__ == "__main__":
