@@ -19,19 +19,17 @@ type incidentStore interface {
 	UserByID(ctx context.Context, id int64) (domain.User, error)
 }
 
-type incidentPublisher interface {
-	PublishIncident(ctx context.Context, topic string, event events.IncidentEvent) error
-}
+type publishIncidentFunc func(ctx context.Context, topic string, event events.IncidentEvent) error
 
 type Detector struct {
 	store     incidentStore
-	publisher incidentPublisher
+	publisher publishIncidentFunc
 	topic     string
 	log       *slog.Logger
 	threshold int
 }
 
-func NewDetector(store incidentStore, publisher incidentPublisher, topic string, log *slog.Logger, threshold int) *Detector {
+func NewDetector(store incidentStore, publisher publishIncidentFunc, topic string, log *slog.Logger, threshold int) *Detector {
 	return &Detector{
 		store:     store,
 		publisher: publisher,
@@ -115,7 +113,7 @@ func (d *Detector) notify(ctx context.Context, monitorID int64, incident domain.
 		StartedAt:   incident.StartedAt,
 		ResolvedAt:  incident.ResolvedAt,
 	}
-	if err := d.publisher.PublishIncident(ctx, d.topic, event); err != nil {
+	if err := d.publisher(ctx, d.topic, event); err != nil {
 		d.log.Error("publish incident event", "monitor", monitorID, "error", err)
 	}
 }

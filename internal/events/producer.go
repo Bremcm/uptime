@@ -26,56 +26,20 @@ func (p *Producer) Close() {
 	p.client.Close()
 }
 
-func (p *Producer) PublishCheckJob(ctx context.Context, topic string, job CheckJob) error {
-	value, err := json.Marshal(job)
+func Publish[T Keyer](ctx context.Context, p *Producer, topic string, msg T) error {
+	value, err := json.Marshal(msg)
 	if err != nil {
-		return fmt.Errorf("marshal check job: %w", err)
+		return fmt.Errorf("marshal message: %w", err)
 	}
 
 	record := &kgo.Record{
 		Topic: topic,
-		Key:   []byte(fmt.Sprintf("%d", job.MonitorID)),
+		Key:   []byte(msg.Key()),
 		Value: value,
 	}
 
 	if err := p.client.ProduceSync(ctx, record).FirstErr(); err != nil {
-		return fmt.Errorf("produce check job: %w", err)
-	}
-	return nil
-}
-
-func (p *Producer) PublishCheckResult(ctx context.Context, topic string, result CheckResult) error {
-	value, err := json.Marshal(result)
-	if err != nil {
-		return fmt.Errorf("marshal check result: %w", err)
-	}
-
-	record := &kgo.Record{
-		Topic: topic,
-		Key:   []byte(fmt.Sprintf("%d", result.MonitorID)),
-		Value: value,
-	}
-
-	if err := p.client.ProduceSync(ctx, record).FirstErr(); err != nil {
-		return fmt.Errorf("produce check result: %w", err)
-	}
-	return nil
-}
-
-func (p *Producer) PublishIncident(ctx context.Context, topic string, event IncidentEvent) error {
-	value, err := json.Marshal(event)
-	if err != nil {
-		return fmt.Errorf("marshal incident event: %w", err)
-	}
-
-	record := &kgo.Record{
-		Topic: topic,
-		Key:   []byte(fmt.Sprintf("%d", event.IncidentID)),
-		Value: value,
-	}
-
-	if err := p.client.ProduceSync(ctx, record).FirstErr(); err != nil {
-		return fmt.Errorf("produce incident event: %w", err)
+		return fmt.Errorf("produce message: %w", err)
 	}
 	return nil
 }

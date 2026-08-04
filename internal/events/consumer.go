@@ -29,7 +29,7 @@ func (c *Consumer) Close() {
 	c.client.Close()
 }
 
-func (c *Consumer) ConsumeCheckJobs(ctx context.Context, handle func(context.Context, CheckJob) error) error {
+func Consume[T any](ctx context.Context, c *Consumer, handle func(context.Context, T) error) error {
 	for {
 		fetches := c.client.PollFetches(ctx)
 		if ctx.Err() != nil {
@@ -40,55 +40,11 @@ func (c *Consumer) ConsumeCheckJobs(ctx context.Context, handle func(context.Con
 		}
 
 		fetches.EachRecord(func(r *kgo.Record) {
-			var job CheckJob
-			if err := json.Unmarshal(r.Value, &job); err != nil {
+			var msg T
+			if err := json.Unmarshal(r.Value, &msg); err != nil {
 				return
 			}
-			if err := handle(ctx, job); err != nil {
-				return
-			}
-		})
-	}
-}
-
-func (c *Consumer) ConsumeCheckResults(ctx context.Context, handle func(context.Context, CheckResult) error) error {
-	for {
-		fetches := c.client.PollFetches(ctx)
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if errs := fetches.Errors(); len(errs) > 0 {
-			return fmt.Errorf("poll fetches: %v", errs)
-		}
-
-		fetches.EachRecord(func(r *kgo.Record) {
-			var result CheckResult
-			if err := json.Unmarshal(r.Value, &result); err != nil {
-				return
-			}
-			if err := handle(ctx, result); err != nil {
-				return
-			}
-		})
-	}
-}
-
-func (c *Consumer) ConsumeIncidents(ctx context.Context, handle func(context.Context, IncidentEvent) error) error {
-	for {
-		fetches := c.client.PollFetches(ctx)
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if errs := fetches.Errors(); len(errs) > 0 {
-			return fmt.Errorf("poll fetches: %v", errs)
-		}
-
-		fetches.EachRecord(func(r *kgo.Record) {
-			var event IncidentEvent
-			if err := json.Unmarshal(r.Value, &event); err != nil {
-				return
-			}
-			if err := handle(ctx, event); err != nil {
+			if err := handle(ctx, msg); err != nil {
 				return
 			}
 		})

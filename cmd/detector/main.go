@@ -40,7 +40,10 @@ func main() {
 	}
 	defer producer.Close()
 
-	detector := monitor.NewDetector(store, producer, cfg.IncidentsTopic, log, cfg.DetectorThreshold)
+	publish := func(ctx context.Context, topic string, event events.IncidentEvent) error {
+		return events.Publish(ctx, producer, topic, event)
+	}
+	detector := monitor.NewDetector(store, publish, cfg.IncidentsTopic, log, cfg.DetectorThreshold)
 	consumer, err := events.NewConsumer(cfg.KafkaBrokers, cfg.ResultsTopic, "detectors")
 	if err != nil {
 		log.Error("failed to create consumer", "error", err)
@@ -50,7 +53,7 @@ func main() {
 
 	log.Info("detector started", "topic", cfg.ResultsTopic)
 
-	err = consumer.ConsumeCheckResults(ctx, func(ctx context.Context, result events.CheckResult) error {
+	err = events.Consume(ctx, consumer, func(ctx context.Context, result events.CheckResult) error {
 		check := domain.Check{
 			MonitorID:  result.MonitorID,
 			Status:     domain.CheckStatus(result.Status),

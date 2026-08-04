@@ -44,7 +44,7 @@ func main() {
 
 	log.Info("checker started", "in", cfg.ChecksTopic, "out", cfg.ResultsTopic)
 
-	err = consumer.ConsumeCheckJobs(ctx, func(ctx context.Context, job events.CheckJob) error {
+	err = events.Consume(ctx, consumer, func(ctx context.Context, job events.CheckJob) error {
 		m := domain.Monitor{ID: job.MonitorID, URL: job.URL}
 		check := prober.Probe(ctx, m)
 
@@ -56,7 +56,7 @@ func main() {
 			Error:      check.Error,
 			CheckedAt:  check.CheckedAt,
 		}
-		if err := producer.PublishCheckResult(ctx, cfg.ResultsTopic, result); err != nil {
+		if err := events.Publish(ctx, producer, cfg.ResultsTopic, result); err != nil {
 			log.Error("failed to publish result", "monitor", job.MonitorID, "error", err)
 			return err
 		}

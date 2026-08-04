@@ -9,9 +9,7 @@ import (
 	"github.com/Bremcm/uptime/internal/events"
 )
 
-type jobPublisher interface {
-	PublishCheckJob(ctx context.Context, topic string, job events.CheckJob) error
-}
+type publishFunc func(ctx context.Context, topic string, job events.CheckJob) error
 
 type monitorLister interface {
 	EnabledMonitors(ctx context.Context) ([]domain.Monitor, error)
@@ -19,13 +17,13 @@ type monitorLister interface {
 
 type Scheduler struct {
 	store     monitorLister
-	publisher jobPublisher
+	publisher publishFunc
 	topic     string
 	log       *slog.Logger
 	interval  time.Duration
 }
 
-func NewScheduler(store monitorLister, publisher jobPublisher, topic string, log *slog.Logger, interval time.Duration) *Scheduler {
+func NewScheduler(store monitorLister, publisher publishFunc, topic string, log *slog.Logger, interval time.Duration) *Scheduler {
 	return &Scheduler{
 		store:     store,
 		publisher: publisher,
@@ -60,7 +58,7 @@ func (s *Scheduler) runOnce(ctx context.Context) {
 
 	for _, m := range monitors {
 		job := events.CheckJob{MonitorID: m.ID, URL: m.URL}
-		if err := s.publisher.PublishCheckJob(ctx, s.topic, job); err != nil {
+		if err := s.publisher(ctx, s.topic, job); err != nil {
 			s.log.Error("failed to publish check job", "monitor", m.ID, "error", err)
 		}
 	}

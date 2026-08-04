@@ -43,7 +43,10 @@ func main() {
 	}
 	defer producer.Close()
 
-	scheduler := monitor.NewScheduler(store, producer, cfg.ChecksTopic, log, cfg.SchedulerTick)
+	publish := func(ctx context.Context, topic string, job events.CheckJob) error {
+		return events.Publish(ctx, producer, topic, job)
+	}
+	scheduler := monitor.NewScheduler(store, publish, cfg.ChecksTopic, log, cfg.SchedulerTick)
 	tokenManager := auth.NewTokenManager(cfg.JWTSecret, 24*time.Hour)
 	srv := httpserver.NewServer(store, tokenManager)
 	go func() {

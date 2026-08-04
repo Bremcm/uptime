@@ -35,7 +35,7 @@ func main() {
 
 	log.Info("notifier started", "topic", cfg.IncidentsTopic)
 
-	err = consumer.ConsumeIncidents(ctx, func(ctx context.Context, event events.IncidentEvent) error {
+	err = events.Consume(ctx, consumer, func(ctx context.Context, event events.IncidentEvent) error {
 		if err := telegram.NotifyFromEvent(ctx, event); err != nil {
 			log.Error("failed to notify", "incident", event.IncidentID, "error", err)
 			return err
