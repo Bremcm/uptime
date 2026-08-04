@@ -16,20 +16,22 @@ type monitorLister interface {
 }
 
 type Scheduler struct {
-	store     monitorLister
-	publisher publishFunc
-	topic     string
-	log       *slog.Logger
-	interval  time.Duration
+	store         monitorLister
+	publisher     publishFunc
+	topic         string
+	log           *slog.Logger
+	interval      time.Duration
+	lastPublished map[int64]time.Time
 }
 
 func NewScheduler(store monitorLister, publisher publishFunc, topic string, log *slog.Logger, interval time.Duration) *Scheduler {
 	return &Scheduler{
-		store:     store,
-		publisher: publisher,
-		topic:     topic,
-		log:       log,
-		interval:  interval,
+		store:         store,
+		publisher:     publisher,
+		topic:         topic,
+		log:           log,
+		interval:      interval,
+		lastPublished: make(map[int64]time.Time),
 	}
 }
 
@@ -56,10 +58,26 @@ func (s *Scheduler) runOnce(ctx context.Context) {
 		return
 	}
 
+	now := time.Now()
 	for _, m := range monitors {
+		if !s.isDue(m, now) {
+			continue
+		}
+
 		job := events.CheckJob{MonitorID: m.ID, URL: m.URL}
 		if err := s.publisher(ctx, s.topic, job); err != nil {
 			s.log.Error("failed to publish check job", "monitor", m.ID, "error", err)
+			continue
 		}
+		s.lastPublished[m.ID] = now
 	}
+}
+
+func (s *Scheduler) isDue(m domain.Monitor, now time.Time) bool {
+	last, seen := s.lastPublished[m.ID]
+	if !seen {
+		return true
+	}
+	interval := time.Duration(m.IntervalSeconds) * time.Second
+	return now.Sub(last) >= interval
 }
