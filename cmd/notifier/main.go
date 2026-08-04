@@ -26,7 +26,7 @@ func main() {
 
 	telegram := notifier.NewTelegram(cfg.TelegramToken)
 
-	consumer, err := events.NewConsumer(cfg.KafkaBrokers, cfg.IncidentsTopic, "notifiers")
+	consumer, err := events.NewConsumer(cfg.KafkaBrokers, cfg.IncidentsTopic, "notifiers", log)
 	if err != nil {
 		log.Error("failed to create consumer", "error", err)
 		os.Exit(1)

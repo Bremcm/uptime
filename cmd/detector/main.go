@@ -44,7 +44,7 @@ func main() {
 		return events.Publish(ctx, producer, topic, event)
 	}
 	detector := monitor.NewDetector(store, publish, cfg.IncidentsTopic, log, cfg.DetectorThreshold)
-	consumer, err := events.NewConsumer(cfg.KafkaBrokers, cfg.ResultsTopic, "detectors")
+	consumer, err := events.NewConsumer(cfg.KafkaBrokers, cfg.ResultsTopic, "detectors", log)
 	if err != nil {
 		log.Error("failed to create consumer", "error", err)
 		os.Exit(1)

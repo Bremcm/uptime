@@ -35,7 +35,7 @@ func main() {
 	}
 	defer producer.Close()
 
-	consumer, err := events.NewConsumer(cfg.KafkaBrokers, cfg.ChecksTopic, "checkers")
+	consumer, err := events.NewConsumer(cfg.KafkaBrokers, cfg.ChecksTopic, "checkers", log)
 	if err != nil {
 		log.Error("failed to create consumer", "error", err)
 		os.Exit(1)
