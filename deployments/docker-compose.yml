@@ -5,11 +5,43 @@ x-common-env: &common-env
   TELEGRAM_TOKEN: ${TELEGRAM_TOKEN}
   HTTP_ADDR: ":8080"
 services:
+  kafka-init:
+      image: apache/kafka:3.9.0
+      depends_on:
+        kafka:
+          condition: service_healthy
+      entrypoint: ["/bin/sh", "-c"]
+      command: |
+        "
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic checks --partitions 3 --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic check-results --partitions 3 --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic incidents --partitions 3 --replication-factor 1
+        "
+  migrate:
+    image: golang:1.26
+    working_dir: /app
+    volumes:
+      - ..:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command: |
+      "
+      go install github.com/pressly/goose/v3/cmd/goose@latest
+      goose -dir migrations postgres 'postgres://uptime:uptime@postgres:5432/uptime?sslmode=disable' up
+      "
   kafka:
     image: apache/kafka:3.9.0
     container_name: uptime-kafka
     ports:
       - "9092:9092"
+    healthcheck:
+      test: ["CMD", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
     environment:
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       KAFKA_NODE_ID: 1
@@ -40,60 +72,86 @@ services:
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U uptime"]
       interval: 5s
-      timeout: 3s
+      timeout: 5s
       retries: 5
   api:
     build:
       context: ..
       args:
         SERVICE: api
+    restart: unless-stopped
     environment:
       <<: *common-env
     ports:
       - "8080:8080"
     depends_on:
-      - postgres
-      - kafka
+      migrate:
+        condition: service_completed_successfully
+      kafka-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
 
   checker:
     build:
       context: ..
       args:
         SERVICE: checker
+    restart: unless-stopped
     environment:
       <<: *common-env
     depends_on:
-      - kafka
+      kafka-init:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
 
   detector:
     build:
       context: ..
       args:
         SERVICE: detector
+    restart: unless-stopped
     environment:
       <<: *common-env
     depends_on:
-      - postgres
-      - kafka
+      migrate:
+          condition: service_completed_successfully
+      kafka-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
 
   notifier:
     build:
       context: ..
       args:
         SERVICE: notifier
+    restart: unless-stopped
     environment:
       <<: *common-env
     depends_on:
-      - kafka
+      kafka-init:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
   ai-service:
     build:
       context: ../ai-service
+    restart: unless-stopped
     environment:
       KAFKA_BROKERS: kafka:19092
       OLLAMA_HOST: http://host.docker.internal:11434
       TELEGRAM_TOKEN: ${TELEGRAM_TOKEN}
     depends_on:
-      - kafka
+      kafka-init:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
     extra_hosts:
       - "host.docker.internal:host-gateway"
 volumes:
