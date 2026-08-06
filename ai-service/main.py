@@ -11,9 +11,10 @@ TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 
 
 def main():
+    brokers = os.environ.get("KAFKA_BROKERS", "localhost:9092")
     consumer = KafkaConsumer(
         "incidents",
-        bootstrap_servers="localhost:9092",
+        bootstrap_servers=brokers,
         group_id="ai-explainer",
         auto_offset_reset="earliest",
         value_deserializer=lambda m: json.loads(m.decode("utf-8")),

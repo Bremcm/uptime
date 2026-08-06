@@ -1,8 +1,9 @@
 import requests
 from datetime import datetime
+import os
 
-
-OLLAMA_URL = "http://localhost:11434/api/generate"
+OLLAMA_HOST = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+OLLAMA_URL = f"{OLLAMA_HOST}/api/generate"
 MODEL = "llama3.2"
 
 
