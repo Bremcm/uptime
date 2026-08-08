@@ -11,27 +11,31 @@ import (
 )
 
 type Config struct {
-	DatabaseURL       string
-	JWTSecret         string
-	HTTPAddr          string
-	TelegramToken     string
-	TelegramChatID    string
-	KafkaBrokers      []string
-	ChecksTopic       string
-	ResultsTopic      string
-	IncidentsTopic    string
-	SchedulerWorkers  int
-	DetectorThreshold int
-	SchedulerTick     time.Duration
+	DatabaseURL             string
+	JWTSecret               string
+	HTTPAddr                string
+	TelegramToken           string
+	TelegramChatID          string
+	KafkaBrokers            []string
+	ChecksTopic             string
+	ResultsTopic            string
+	IncidentsTopic          string
+	ClickHouseAddr          string
+	ClickHouseBatchSize     int
+	ClickHouseFlushInterval time.Duration
+	SchedulerWorkers        int
+	DetectorThreshold       int
+	SchedulerTick           time.Duration
 }
 
 func Load() (*Config, error) {
 	_ = godotenv.Load()
 
 	cfg := &Config{
-		DatabaseURL: os.Getenv("DATABASE_URL"),
-		JWTSecret:   os.Getenv("JWT_SECRET"),
-		HTTPAddr:    getEnv("HTTP_ADDR", ":8080"),
+		DatabaseURL:    os.Getenv("DATABASE_URL"),
+		JWTSecret:      os.Getenv("JWT_SECRET"),
+		HTTPAddr:       getEnv("HTTP_ADDR", ":8080"),
+		ClickHouseAddr: os.Getenv("CLICKHOUSE_ADDR"),
 	}
 
 	if cfg.DatabaseURL == "" {
@@ -46,6 +50,8 @@ func Load() (*Config, error) {
 	cfg.SchedulerTick = time.Duration(getEnvInt("SCHEDULER_TICK_SECONDS", 15)) * time.Second
 	brokers := getEnv("KAFKA_BROKERS", "localhost:9092")
 	cfg.KafkaBrokers = strings.Split(brokers, ",")
+	cfg.ClickHouseBatchSize = getEnvInt("CLICKHOUSE_BATCH_SIZE", 100)
+	cfg.ClickHouseFlushInterval = time.Duration(getEnvInt("CLICKHOUSE_FLUSH_SECONDS", 5)) * time.Second
 	cfg.ChecksTopic = getEnv("CHECKS_TOPIC", "checks")
 	cfg.IncidentsTopic = getEnv("INCIDENTS_TOPIC", "incidents")
 	cfg.ResultsTopic = getEnv("RESULTS_TOPIC", "check-results")
