@@ -74,6 +74,22 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    container_name: uptime-clickhouse
+    environment:
+      <<: *common-env
+      CLICKHOUSE_ADDR: clickhouse:9000
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - uptime-clickhouse:/var/lib/clickhouse
+      - ./clickhouse-users.xml:/etc/clickhouse-server/users.d/override.xml
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
   api:
     build:
       context: ..
@@ -125,6 +141,22 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+  archiver:
+    build:
+      context: ..
+      args:
+        SERVICE: archiver
+    restart: unless-stopped
+    environment:
+      <<: *common-env
+      CLICKHOUSE_ADDR: clickhouse:9000
+    depends_on:
+      kafka-init:
+        condition: service_completed_successfully
+      kafka:
+        condition: service_healthy
+      clickhouse:
+        condition: service_started
 
   notifier:
     build:
@@ -157,3 +189,4 @@ services:
 volumes:
   uptime-pgdata:
   uptime-kafka:
+  uptime-clickhouse:
