@@ -11,6 +11,12 @@ import (
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 )
 
+type StatPoint struct {
+	Hour       time.Time `json:"hour"`
+	AvgLatency float64   `json:"avg_latency"`
+	UptimePct  float64   `json:"uptime_pct"`
+}
+
 type Client struct {
 	conn          driver.Conn
 	mu            sync.Mutex
@@ -108,4 +114,33 @@ func (c *Client) Run(ctx context.Context) {
 
 func (c *Client) Close() error {
 	return c.conn.Close()
+}
+
+func (c *Client) QueryStats(ctx context.Context, monitorID int64, from, to time.Time) ([]StatPoint, error) {
+	const query = `
+		SELECT
+			hour,
+			sum(sum_latency) / sum(count_checks)     AS avg_latency,
+			100.0 * sum(count_up) / sum(count_checks) AS uptime_pct
+		FROM checks_hourly
+		WHERE monitor_id = ? AND hour >= ? AND hour < ?
+		GROUP BY hour
+		ORDER BY hour`
+
+	rows, err := c.conn.Query(ctx, query, uint64(monitorID), from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var points []StatPoint
+	for rows.Next() {
+		var p StatPoint
+		if err := rows.Scan(&p.Hour, &p.AvgLatency, &p.UptimePct); err != nil {
+			return nil, err
+		}
+		points = append(points, p)
+	}
+
+	return points, rows.Err()
 }
