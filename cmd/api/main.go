@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Bremcm/uptime/internal/auth"
+	"github.com/Bremcm/uptime/internal/clickhouse"
 	"github.com/Bremcm/uptime/internal/config"
 	"github.com/Bremcm/uptime/internal/events"
 	httpserver "github.com/Bremcm/uptime/internal/http"
@@ -36,6 +37,13 @@ func main() {
 	defer store.Close()
 	log.Info("connected to database")
 
+	chClient, err := clickhouse.New(ctx, cfg.ClickHouseAddr, cfg.ClickHouseBatchSize, cfg.ClickHouseFlushInterval, log)
+	if err != nil {
+		log.Error("failed to connect to clickhouse", "error", err)
+		os.Exit(1)
+	}
+	defer chClient.Close()
+
 	producer, err := events.NewProducer(cfg.KafkaBrokers)
 	if err != nil {
 		log.Error("failed to create producer", "error", err)
@@ -48,7 +56,7 @@ func main() {
 	}
 	scheduler := monitor.NewScheduler(store, publish, cfg.ChecksTopic, log, cfg.SchedulerTick)
 	tokenManager := auth.NewTokenManager(cfg.JWTSecret, 24*time.Hour)
-	srv := httpserver.NewServer(store, tokenManager)
+	srv := httpserver.NewServer(store, tokenManager, chClient)
 	go func() {
 		log.Info("http server starting", "addr", cfg.HTTPAddr)
 		if err := srv.Start(cfg.HTTPAddr); err != nil {
