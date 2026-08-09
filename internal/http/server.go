@@ -191,6 +191,10 @@ func (s *Server) handleMonitorStats(c echo.Context) error {
 		to = parsed
 	}
 
+	if !from.Before(to) {
+		return echo.NewHTTPError(http.StatusBadRequest, "from must be before to")
+	}
+
 	points, err := s.stats.QueryStats(c.Request().Context(), id, from, to)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "could not load stats")

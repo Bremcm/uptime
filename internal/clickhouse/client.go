@@ -114,7 +114,9 @@ func (c *Client) Run(ctx context.Context) {
 				c.log.Error("flush failed", "error", err)
 			}
 		case <-ctx.Done():
-			c.flush(context.Background())
+			flushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			c.flush(flushCtx)
+			cancel()
 			close(c.done)
 			return
 		}
