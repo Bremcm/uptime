@@ -32,6 +32,16 @@ services:
       go install github.com/pressly/goose/v3/cmd/goose@latest
       goose -dir migrations postgres 'postgres://uptime:uptime@postgres:5432/uptime?sslmode=disable' up
       "
+  clickhouse-init:
+    image: clickhouse/clickhouse-server:24.8
+    volumes:
+      - ./clickhouse/init.sql:/init.sql:ro
+    entrypoint: >
+      sh -c "clickhouse-client --host clickhouse --queries-file /init.sql"
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    restart: "no"
   kafka:
     image: apache/kafka:3.9.0
     container_name: uptime-kafka
@@ -86,7 +96,13 @@ services:
       - "9000:9000"
     volumes:
       - uptime-clickhouse:/var/lib/clickhouse
-      - ./clickhouse-users.xml:/etc/clickhouse-server/users.d/override.xml
+      - ./clickhouse/users.xml:/etc/clickhouse-server/users.d/override.xml
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
     ulimits:
       nofile:
         soft: 262144
@@ -102,6 +118,8 @@ services:
     ports:
       - "8080:8080"
     depends_on:
+      clickhouse-init:
+        condition: service_completed_successfully
       migrate:
         condition: service_completed_successfully
       kafka-init:
@@ -158,6 +176,8 @@ services:
         condition: service_healthy
       clickhouse:
         condition: service_started
+      clickhouse-init:
+        condition: service_completed_successfully
 
   notifier:
     build:
