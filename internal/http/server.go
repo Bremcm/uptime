@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Bremcm/uptime/internal/auth"
+	"github.com/Bremcm/uptime/internal/clickhouse"
 	"github.com/Bremcm/uptime/internal/domain"
 	"github.com/Bremcm/uptime/internal/storage"
 	"github.com/labstack/echo/v4"
@@ -21,6 +22,10 @@ type store interface {
 	RecentChecks(ctx context.Context, monitorID int64, limit int) ([]domain.Check, error)
 	MonitorByID(ctx context.Context, id int64) (domain.Monitor, error)
 	UpdateUserTelegramChatID(ctx context.Context, userID int64, chatID string) error
+}
+
+type analytics interface {
+	QueryStats(ctx context.Context, monitorID int64, from, to time.Time) ([]clickhouse.StatPoint, error)
 }
 
 type loginRequest struct {
@@ -41,13 +46,14 @@ type Server struct {
 	echo   *echo.Echo
 	store  store
 	tokens *auth.TokenManager
+	stats  analytics
 }
 
-func NewServer(st store, tokens *auth.TokenManager) *Server {
+func NewServer(st store, tokens *auth.TokenManager, stats analytics) *Server {
 	e := echo.New()
 	e.HideBanner = true
 
-	s := &Server{echo: e, store: st, tokens: tokens}
+	s := &Server{echo: e, store: st, tokens: tokens, stats: stats}
 	s.routes()
 	return s
 }
@@ -63,6 +69,7 @@ func (s *Server) routes() {
 	api.POST("/monitors", s.handleCreateMonitor)
 	api.GET("/monitors", s.handleListMonitors)
 	api.GET("/monitors/:id/checks", s.handleMonitorChecks)
+	api.GET("/monitors/:id/stats", s.handleMonitorStats)
 	api.PUT("/me/telegram", s.handleSetTelegram)
 }
 
@@ -147,6 +154,49 @@ func (s *Server) handleMonitorChecks(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "could not load checks")
 	}
 	return c.JSON(http.StatusOK, checks)
+}
+
+func (s *Server) handleMonitorStats(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid monitor id")
+	}
+
+	monitor, err := s.store.MonitorByID(c.Request().Context(), id)
+	if err != nil {
+		if errors.Is(err, storage.ErrMonitorNotFound) {
+			return echo.NewHTTPError(http.StatusNotFound, "monitor not found")
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, "could not load monitor")
+	}
+	if monitor.UserID != userIDFrom(c) {
+		return echo.NewHTTPError(http.StatusNotFound, "monitor not found")
+	}
+
+	to := time.Now()
+	from := to.Add(-24 * time.Hour)
+
+	if v := c.QueryParam("from"); v != "" {
+		parsed, err := time.Parse(time.RFC3339, v)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "invalid from timestamp")
+		}
+		from = parsed
+	}
+	if v := c.QueryParam("to"); v != "" {
+		parsed, err := time.Parse(time.RFC3339, v)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "invalid to timestamp")
+		}
+		to = parsed
+	}
+
+	points, err := s.stats.QueryStats(c.Request().Context(), id, from, to)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "could not load stats")
+	}
+
+	return c.JSON(http.StatusOK, points)
 }
 
 func (s *Server) handleRegister(c echo.Context) error {
