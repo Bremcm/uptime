@@ -24,6 +24,8 @@ type Client struct {
 	batchSize     int
 	flushInterval time.Duration
 	log           *slog.Logger
+	done          chan struct{}
+	running       bool
 }
 
 func New(ctx context.Context, addr string, batchSize int, flushInterval time.Duration, log *slog.Logger) (*Client, error) {
@@ -49,6 +51,7 @@ func New(ctx context.Context, addr string, batchSize int, flushInterval time.Dur
 		batchSize:     batchSize,
 		flushInterval: flushInterval,
 		log:           log,
+		done:          make(chan struct{}),
 	}, nil
 }
 
@@ -96,6 +99,7 @@ func (c *Client) flush(ctx context.Context) error {
 }
 
 func (c *Client) Run(ctx context.Context) {
+	c.running = true
 	ticker := time.NewTicker(c.flushInterval)
 	defer ticker.Stop()
 
@@ -107,12 +111,16 @@ func (c *Client) Run(ctx context.Context) {
 			}
 		case <-ctx.Done():
 			c.flush(context.Background())
+			close(c.done)
 			return
 		}
 	}
 }
 
 func (c *Client) Close() error {
+	if c.running {
+		<-c.done
+	}
 	return c.conn.Close()
 }
 
