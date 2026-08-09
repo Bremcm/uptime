@@ -95,7 +95,11 @@ func (c *Client) flush(ctx context.Context) error {
 		}
 	}
 
-	return batch.Send()
+	if err := batch.Send(); err != nil {
+		c.log.Error("flush failed, dropping batch", "rows", len(rows), "error", err)
+		return err
+	}
+	return nil
 }
 
 func (c *Client) Run(ctx context.Context) {
