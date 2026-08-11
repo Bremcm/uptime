@@ -1,8 +1,10 @@
 package http
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
 )
@@ -27,6 +29,26 @@ func (s *Server) authMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 
 		c.Set(userIDKey, userID)
+		return next(c)
+	}
+}
+
+const rateLimitPerMinute = 100
+
+func (s *Server) rateLimitMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		userID := userIDFrom(c)
+		key := fmt.Sprintf("ratelimit:user:%d", userID)
+
+		count, err := s.cache.IncrWithTTL(c.Request().Context(), key, time.Minute)
+		if err != nil {
+			return next(c)
+		}
+
+		if count > rateLimitPerMinute {
+			return echo.NewHTTPError(http.StatusTooManyRequests, "rate limit exceeded")
+		}
+
 		return next(c)
 	}
 }

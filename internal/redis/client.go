@@ -41,3 +41,22 @@ func (c *Client) Get(ctx context.Context, key string) (string, bool, error) {
 func (c *Client) Del(ctx context.Context, key string) error {
 	return c.client.Del(ctx, key).Err()
 }
+
+// Lua script //
+var incrScript = goredis.NewScript(`
+	local n = redis.call('INCR', KEYS[1])
+	if n == 1 then
+		redis.call('EXPIRE', KEYS[1], ARGV[1])
+	end
+	return n
+`)
+
+// ========== //
+
+func (c *Client) IncrWithTTL(ctx context.Context, key string, ttl time.Duration) (int64, error) {
+	n, err := incrScript.Run(ctx, c.client, []string{key}, int(ttl.Seconds())).Int64()
+	if err != nil {
+		return 0, err
+	}
+	return n, nil
+}

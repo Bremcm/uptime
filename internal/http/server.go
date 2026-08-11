@@ -34,6 +34,7 @@ type cache interface {
 	Get(ctx context.Context, key string) (string, bool, error)
 	Set(ctx context.Context, key, value string, ttl time.Duration) error
 	Del(ctx context.Context, key string) error
+	IncrWithTTL(ctx context.Context, key string, ttl time.Duration) (int64, error)
 }
 
 type loginRequest struct {
@@ -75,6 +76,7 @@ func (s *Server) routes() {
 
 	api := s.echo.Group("/api/v1")
 	api.Use(s.authMiddleware)
+	api.Use(s.rateLimitMiddleware)
 	api.POST("/monitors", s.handleCreateMonitor)
 	api.GET("/monitors", s.handleListMonitors)
 	api.GET("/monitors/:id/checks", s.handleMonitorChecks)
