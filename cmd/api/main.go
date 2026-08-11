@@ -14,6 +14,7 @@ import (
 	"github.com/Bremcm/uptime/internal/events"
 	httpserver "github.com/Bremcm/uptime/internal/http"
 	"github.com/Bremcm/uptime/internal/monitor"
+	"github.com/Bremcm/uptime/internal/redis"
 	"github.com/Bremcm/uptime/internal/storage"
 )
 
@@ -44,6 +45,12 @@ func main() {
 	}
 	defer chClient.Close()
 
+	redisClient, err := redis.New(ctx, cfg.RedisAddr)
+	if err != nil {
+		log.Error("failed to connect to redis", "error", err)
+		os.Exit(1)
+	}
+
 	producer, err := events.NewProducer(cfg.KafkaBrokers)
 	if err != nil {
 		log.Error("failed to create producer", "error", err)
@@ -56,7 +63,7 @@ func main() {
 	}
 	scheduler := monitor.NewScheduler(store, publish, cfg.ChecksTopic, log, cfg.SchedulerTick)
 	tokenManager := auth.NewTokenManager(cfg.JWTSecret, 24*time.Hour)
-	srv := httpserver.NewServer(store, tokenManager, chClient)
+	srv := httpserver.NewServer(store, tokenManager, chClient, redisClient)
 	go func() {
 		log.Info("http server starting", "addr", cfg.HTTPAddr)
 		if err := srv.Start(cfg.HTTPAddr); err != nil {

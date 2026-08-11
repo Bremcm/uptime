@@ -21,6 +21,7 @@ type Config struct {
 	ResultsTopic            string
 	IncidentsTopic          string
 	ClickHouseAddr          string
+	RedisAddr               string
 	ClickHouseBatchSize     int
 	ClickHouseFlushInterval time.Duration
 	SchedulerWorkers        int
@@ -36,6 +37,7 @@ func Load() (*Config, error) {
 		JWTSecret:      os.Getenv("JWT_SECRET"),
 		HTTPAddr:       getEnv("HTTP_ADDR", ":8080"),
 		ClickHouseAddr: os.Getenv("CLICKHOUSE_ADDR"),
+		RedisAddr:      os.Getenv("REDIS_ADDR"),
 	}
 
 	if cfg.DatabaseURL == "" {

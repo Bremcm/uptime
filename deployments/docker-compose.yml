@@ -5,6 +5,7 @@ x-common-env: &common-env
   TELEGRAM_TOKEN: ${TELEGRAM_TOKEN}
   HTTP_ADDR: ":8080"
   CLICKHOUSE_ADDR: clickhouse:9000
+  REDIS_ADDR: redis:6379
 services:
   kafka-init:
       image: apache/kafka:3.9.0
@@ -107,6 +108,20 @@ services:
       nofile:
         soft: 262144
         hard: 262144
+  redis:
+    image: redis:7-alpine
+    container_name: uptime-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - uptime-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    restart: unless-stopped
   api:
     build:
       context: ..
@@ -211,3 +226,4 @@ volumes:
   uptime-pgdata:
   uptime-kafka:
   uptime-clickhouse:
+  uptime-redis:

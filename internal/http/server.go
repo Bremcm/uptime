@@ -2,7 +2,9 @@ package http
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -28,6 +30,12 @@ type analytics interface {
 	QueryStats(ctx context.Context, monitorID int64, from, to time.Time) ([]clickhouse.StatPoint, error)
 }
 
+type cache interface {
+	Get(ctx context.Context, key string) (string, bool, error)
+	Set(ctx context.Context, key, value string, ttl time.Duration) error
+	Del(ctx context.Context, key string) error
+}
+
 type loginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
@@ -47,13 +55,14 @@ type Server struct {
 	store  store
 	tokens *auth.TokenManager
 	stats  analytics
+	cache  cache
 }
 
-func NewServer(st store, tokens *auth.TokenManager, stats analytics) *Server {
+func NewServer(st store, tokens *auth.TokenManager, stats analytics, cache cache) *Server {
 	e := echo.New()
 	e.HideBanner = true
 
-	s := &Server{echo: e, store: st, tokens: tokens, stats: stats}
+	s := &Server{echo: e, store: st, tokens: tokens, stats: stats, cache: cache}
 	s.routes()
 	return s
 }
@@ -116,11 +125,22 @@ func (s *Server) handleCreateMonitor(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "could not create monitor")
 	}
 
+	key := fmt.Sprintf("monitors:user:%d", userIDFrom(c))
+	_ = s.cache.Del(c.Request().Context(), key)
+
 	return c.JSON(http.StatusCreated, toMonitorResponse(m))
 }
 
 func (s *Server) handleListMonitors(c echo.Context) error {
-	monitors, err := s.store.MonitorsByUser(c.Request().Context(), userIDFrom(c))
+	ctx := c.Request().Context()
+	userID := userIDFrom(c)
+	key := fmt.Sprintf("monitors:user:%d", userID)
+
+	if cached, found, err := s.cache.Get(ctx, key); err == nil && found {
+		return c.JSONBlob(http.StatusOK, []byte(cached))
+	}
+
+	monitors, err := s.store.MonitorsByUser(ctx, userID)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "could not list monitors")
 	}
@@ -129,7 +149,14 @@ func (s *Server) handleListMonitors(c echo.Context) error {
 	for _, m := range monitors {
 		resp = append(resp, toMonitorResponse(m))
 	}
-	return c.JSON(http.StatusOK, resp)
+
+	payload, err := json.Marshal(resp)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "could not encode monitors")
+	}
+	_ = s.cache.Set(ctx, key, string(payload), 60*time.Second)
+
+	return c.JSONBlob(http.StatusOK, payload)
 }
 
 func (s *Server) handleMonitorChecks(c echo.Context) error {
