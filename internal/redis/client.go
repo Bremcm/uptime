@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
 	goredis "github.com/redis/go-redis/v9"
 )
 
@@ -67,4 +68,32 @@ func (c *Client) SetNX(ctx context.Context, key string, ttl time.Duration) (bool
 		return false, err
 	}
 	return ok, nil
+}
+
+func (c *Client) Lock(ctx context.Context, key string, ttl time.Duration) (string, bool, error) {
+	token := uuid.NewString()
+	ok, err := c.client.SetNX(ctx, key, token, ttl).Result()
+	if err != nil {
+		return "", false, err
+	}
+	if !ok {
+		return "", false, nil
+	}
+	return token, true, nil
+}
+
+// Lua script //
+
+var unlockScript = goredis.NewScript(`
+	if redis.call('GET', KEYS[1]) == ARGV[1] then
+		return redis.call('DEL', KEYS[1])
+	else
+		return 0
+	end
+`)
+
+// ============= //
+
+func (c *Client) Unlock(ctx context.Context, key, token string) error {
+	return unlockScript.Run(ctx, c.client, []string{key}, token).Err()
 }

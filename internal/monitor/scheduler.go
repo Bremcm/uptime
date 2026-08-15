@@ -15,19 +15,26 @@ type monitorLister interface {
 	EnabledMonitors(ctx context.Context) ([]domain.Monitor, error)
 }
 
+type locker interface {
+	Lock(ctx context.Context, key string, ttl time.Duration) (string, bool, error)
+	Unlock(ctx context.Context, key, token string) error
+}
+
 type Scheduler struct {
 	store         monitorLister
 	publisher     publishFunc
+	locker        locker
 	topic         string
 	log           *slog.Logger
 	interval      time.Duration
 	lastPublished map[int64]time.Time
 }
 
-func NewScheduler(store monitorLister, publisher publishFunc, topic string, log *slog.Logger, interval time.Duration) *Scheduler {
+func NewScheduler(store monitorLister, publisher publishFunc, lock locker, topic string, log *slog.Logger, interval time.Duration) *Scheduler {
 	return &Scheduler{
 		store:         store,
 		publisher:     publisher,
+		locker:        lock,
 		topic:         topic,
 		log:           log,
 		interval:      interval,
@@ -52,6 +59,16 @@ func (s *Scheduler) Run(ctx context.Context) {
 }
 
 func (s *Scheduler) runOnce(ctx context.Context) {
+	token, ok, err := s.locker.Lock(ctx, "lock:scheduler", s.interval)
+	if err != nil {
+		s.log.Error("scheduler lock failed", "error", err)
+		return
+	}
+	if !ok {
+		return
+	}
+	defer s.locker.Unlock(ctx, "lock:scheduler", token)
+
 	monitors, err := s.store.EnabledMonitors(ctx)
 	if err != nil {
 		s.log.Error("failed to load monitors", "error", err)
