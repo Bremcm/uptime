@@ -60,3 +60,11 @@ func (c *Client) IncrWithTTL(ctx context.Context, key string, ttl time.Duration)
 	}
 	return n, nil
 }
+
+func (c *Client) SetNX(ctx context.Context, key string, ttl time.Duration) (bool, error) {
+	ok, err := c.client.SetNX(ctx, key, "1", ttl).Result()
+	if err != nil {
+		return false, err
+	}
+	return ok, nil
+}

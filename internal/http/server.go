@@ -35,6 +35,7 @@ type cache interface {
 	Set(ctx context.Context, key, value string, ttl time.Duration) error
 	Del(ctx context.Context, key string) error
 	IncrWithTTL(ctx context.Context, key string, ttl time.Duration) (int64, error)
+	SetNX(ctx context.Context, key string, ttl time.Duration) (bool, error)
 }
 
 type loginRequest struct {
