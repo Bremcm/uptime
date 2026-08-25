@@ -24,6 +24,8 @@ type store interface {
 	RecentChecks(ctx context.Context, monitorID int64, limit int) ([]domain.Check, error)
 	MonitorByID(ctx context.Context, id int64) (domain.Monitor, error)
 	UpdateUserTelegramChatID(ctx context.Context, userID int64, chatID string) error
+	CreateSubscription(ctx context.Context, userID int64, planName string) error
+	SubscriptionByUser(ctx context.Context, userID int64) (domain.Subscription, error)
 }
 
 type analytics interface {
@@ -253,6 +255,9 @@ func (s *Server) handleRegister(c echo.Context) error {
 			return echo.NewHTTPError(http.StatusConflict, "email already registered")
 		}
 		return echo.NewHTTPError(http.StatusInternalServerError, "could not create user")
+	}
+	if err := s.store.CreateSubscription(c.Request().Context(), user.ID, "free"); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "could not create subscription")
 	}
 
 	token, err := s.tokens.Generate(user.ID)

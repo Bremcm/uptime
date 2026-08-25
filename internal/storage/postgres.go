@@ -15,6 +15,7 @@ var ErrIncidentNotFound = errors.New("incident not found")
 var ErrEmailTaken = errors.New("email already taken")
 var ErrUserNotFound = errors.New("user not found")
 var ErrMonitorNotFound = errors.New("monitor not found")
+var ErrSubscriptionNotFound = errors.New("subscription not found")
 
 type Store struct {
 	pool *pgxpool.Pool
@@ -262,6 +263,41 @@ func (s *Store) UpdateUserTelegramChatID(ctx context.Context, userID int64, chat
 	_, err := s.pool.Exec(ctx, q, chatID, userID)
 	if err != nil {
 		return fmt.Errorf("update telegram chat id: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) SubscriptionByUser(ctx context.Context, userID int64) (domain.Subscription, error) {
+	const q = `
+		SELECT s.user_id, s.status,
+		       p.id, p.name, p.max_monitors, p.min_interval_seconds, p.rate_limit_per_minute
+		FROM subscriptions s
+		JOIN plans p ON p.id = s.plan_id
+		WHERE s.user_id = $1`
+
+	var sub domain.Subscription
+	err := s.pool.QueryRow(ctx, q, userID).Scan(
+		&sub.UserID, &sub.Status,
+		&sub.Plan.ID, &sub.Plan.Name, &sub.Plan.MaxMonitors,
+		&sub.Plan.MinIntervalSeconds, &sub.Plan.RateLimitPerMinute,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.Subscription{}, ErrSubscriptionNotFound
+		}
+		return domain.Subscription{}, fmt.Errorf("subscription by user: %w", err)
+	}
+	return sub, nil
+}
+
+func (s *Store) CreateSubscription(ctx context.Context, userID int64, planName string) error {
+	const q = `
+		INSERT INTO subscriptions (user_id, plan_id)
+		SELECT $1, id FROM plans WHERE name = $2`
+
+	_, err := s.pool.Exec(ctx, q, userID, planName)
+	if err != nil {
+		return fmt.Errorf("create subscription: %w", err)
 	}
 	return nil
 }

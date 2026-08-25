@@ -50,3 +50,17 @@ type Incident struct {
 func (i Incident) IsOpen() bool {
 	return i.ResolvedAt == nil
 }
+
+type Plan struct {
+	ID                 int64
+	Name               string
+	MaxMonitors        int
+	MinIntervalSeconds int
+	RateLimitPerMinute int
+}
+
+type Subscription struct {
+	UserID int64
+	Plan   Plan
+	Status string
+}
