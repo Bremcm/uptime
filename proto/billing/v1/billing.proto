@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package billing.v1;
+
+option go_package = "github.com/Bremcm/uptime/internal/pb/billing/v1;billingv1";
+
+service BillingService {
+  rpc GetLimits(GetLimitsRequest) returns (GetLimitsResponse);
+}
+
+message GetLimitsRequest {
+  int64 user_id = 1;
+}
+
+message GetLimitsResponse {
+  string plan_name = 1;
+  int32 max_monitors = 2;
+  int32 min_interval_seconds = 3;
+  int32 rate_limit_per_minute = 4;
+}
