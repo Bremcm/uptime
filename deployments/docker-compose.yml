@@ -143,6 +143,21 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+  billing:
+    build:
+      context: ..
+      args:
+        SERVICE: billing
+    restart: unless-stopped
+    ports:
+      - "50051:50051"
+    environment:
+      <<: *common-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
 
   checker:
     build:

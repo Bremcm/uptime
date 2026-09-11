@@ -22,6 +22,7 @@ type Config struct {
 	IncidentsTopic          string
 	ClickHouseAddr          string
 	RedisAddr               string
+	BillingGRPCAddr         string
 	ClickHouseBatchSize     int
 	ClickHouseFlushInterval time.Duration
 	SchedulerWorkers        int
@@ -33,11 +34,12 @@ func Load() (*Config, error) {
 	_ = godotenv.Load()
 
 	cfg := &Config{
-		DatabaseURL:    os.Getenv("DATABASE_URL"),
-		JWTSecret:      os.Getenv("JWT_SECRET"),
-		HTTPAddr:       getEnv("HTTP_ADDR", ":8080"),
-		ClickHouseAddr: os.Getenv("CLICKHOUSE_ADDR"),
-		RedisAddr:      os.Getenv("REDIS_ADDR"),
+		DatabaseURL:     os.Getenv("DATABASE_URL"),
+		JWTSecret:       os.Getenv("JWT_SECRET"),
+		BillingGRPCAddr: getEnv("BILLING_GRPC_ADDR", ":50051"),
+		HTTPAddr:        getEnv("HTTP_ADDR", ":8080"),
+		ClickHouseAddr:  os.Getenv("CLICKHOUSE_ADDR"),
+		RedisAddr:       os.Getenv("REDIS_ADDR"),
 	}
 
 	if cfg.DatabaseURL == "" {
