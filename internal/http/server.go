@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Bremcm/uptime/internal/auth"
+	"github.com/Bremcm/uptime/internal/billingclient"
 	"github.com/Bremcm/uptime/internal/clickhouse"
 	"github.com/Bremcm/uptime/internal/domain"
 	"github.com/Bremcm/uptime/internal/storage"
@@ -40,6 +41,10 @@ type cache interface {
 	SetNX(ctx context.Context, key string, ttl time.Duration) (bool, error)
 }
 
+type billing interface {
+	GetLimits(ctx context.Context, userID int64) (billingclient.Limits, error)
+}
+
 type loginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
@@ -55,18 +60,19 @@ type authResponse struct {
 }
 
 type Server struct {
-	echo   *echo.Echo
-	store  store
-	tokens *auth.TokenManager
-	stats  analytics
-	cache  cache
+	echo    *echo.Echo
+	store   store
+	tokens  *auth.TokenManager
+	stats   analytics
+	cache   cache
+	billing billing
 }
 
-func NewServer(st store, tokens *auth.TokenManager, stats analytics, cache cache) *Server {
+func NewServer(st store, tokens *auth.TokenManager, stats analytics, cache cache, billing billing) *Server {
 	e := echo.New()
 	e.HideBanner = true
 
-	s := &Server{echo: e, store: st, tokens: tokens, stats: stats, cache: cache}
+	s := &Server{echo: e, store: st, tokens: tokens, stats: stats, cache: cache, billing: billing}
 	s.routes()
 	return s
 }
@@ -119,8 +125,19 @@ func (s *Server) handleCreateMonitor(c echo.Context) error {
 		req.IntervalSeconds = 300
 	}
 
-	m, err := s.store.CreateMonitor(c.Request().Context(), domain.Monitor{
-		UserID:          userIDFrom(c),
+	ctx := c.Request().Context()
+	userID := userIDFrom(c)
+
+	limits, err := s.billing.GetLimits(ctx, userID)
+	if err == nil {
+		existing, err := s.store.MonitorsByUser(ctx, userID)
+		if err == nil && len(existing) >= limits.MaxMonitors {
+			return echo.NewHTTPError(http.StatusForbidden, "monitor limit reached for your plan")
+		}
+	}
+
+	m, err := s.store.CreateMonitor(ctx, domain.Monitor{
+		UserID:          userID,
 		Name:            req.Name,
 		URL:             req.URL,
 		IntervalSeconds: req.IntervalSeconds,
@@ -130,8 +147,8 @@ func (s *Server) handleCreateMonitor(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "could not create monitor")
 	}
 
-	key := fmt.Sprintf("monitors:user:%d", userIDFrom(c))
-	_ = s.cache.Del(c.Request().Context(), key)
+	key := fmt.Sprintf("monitors:user:%d", userID)
+	_ = s.cache.Del(ctx, key)
 
 	return c.JSON(http.StatusCreated, toMonitorResponse(m))
 }

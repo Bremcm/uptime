@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Bremcm/uptime/internal/auth"
+	"github.com/Bremcm/uptime/internal/billingclient"
 	"github.com/Bremcm/uptime/internal/clickhouse"
 	"github.com/Bremcm/uptime/internal/config"
 	"github.com/Bremcm/uptime/internal/events"
@@ -51,6 +52,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	billingClient, err := billingclient.New(cfg.BillingClientAddr)
+	if err != nil {
+		log.Error("failed to create billing client", "error", err)
+		os.Exit(1)
+	}
+
 	producer, err := events.NewProducer(cfg.KafkaBrokers)
 	if err != nil {
 		log.Error("failed to create producer", "error", err)
@@ -63,7 +70,7 @@ func main() {
 	}
 	scheduler := monitor.NewScheduler(store, publish, redisClient, cfg.ChecksTopic, log, cfg.SchedulerTick)
 	tokenManager := auth.NewTokenManager(cfg.JWTSecret, 24*time.Hour)
-	srv := httpserver.NewServer(store, tokenManager, chClient, redisClient)
+	srv := httpserver.NewServer(store, tokenManager, chClient, redisClient, billingClient)
 	go func() {
 		log.Info("http server starting", "addr", cfg.HTTPAddr)
 		if err := srv.Start(cfg.HTTPAddr); err != nil {
