@@ -134,6 +134,9 @@ func (s *Server) handleCreateMonitor(c echo.Context) error {
 		if err == nil && len(existing) >= limits.MaxMonitors {
 			return echo.NewHTTPError(http.StatusForbidden, "monitor limit reached for your plan")
 		}
+		if req.IntervalSeconds < limits.MinIntervalSeconds {
+			return echo.NewHTTPError(http.StatusForbidden, fmt.Sprintf("minimum interval for your plan is %d seconds", limits.MinIntervalSeconds))
+		}
 	}
 
 	m, err := s.store.CreateMonitor(ctx, domain.Monitor{

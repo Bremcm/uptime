@@ -1,8 +1,10 @@
 package http
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -33,22 +35,43 @@ func (s *Server) authMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
-const rateLimitPerMinute = 100
+const defaultRateLimitPerMinute = 100
 
 func (s *Server) rateLimitMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
+		ctx := c.Request().Context()
 		userID := userIDFrom(c)
-		key := fmt.Sprintf("ratelimit:user:%d", userID)
 
-		count, err := s.cache.IncrWithTTL(c.Request().Context(), key, time.Minute)
+		limit := s.rateLimitFor(ctx, userID)
+
+		key := fmt.Sprintf("ratelimit:user:%d", userID)
+		count, err := s.cache.IncrWithTTL(ctx, key, time.Minute)
 		if err != nil {
 			return next(c)
 		}
 
-		if count > rateLimitPerMinute {
+		if count > int64(limit) {
 			return echo.NewHTTPError(http.StatusTooManyRequests, "rate limit exceeded")
 		}
 
 		return next(c)
 	}
+}
+
+func (s *Server) rateLimitFor(ctx context.Context, userID int64) int {
+	cacheKey := fmt.Sprintf("billing:limit:user:%d", userID)
+
+	if cached, found, err := s.cache.Get(ctx, cacheKey); err == nil && found {
+		if n, err := strconv.Atoi(cached); err == nil {
+			return n
+		}
+	}
+
+	limits, err := s.billing.GetLimits(ctx, userID)
+	if err != nil {
+		return defaultRateLimitPerMinute
+	}
+
+	_ = s.cache.Set(ctx, cacheKey, strconv.Itoa(limits.RateLimitPerMinute), time.Minute)
+	return limits.RateLimitPerMinute
 }
