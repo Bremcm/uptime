@@ -6,6 +6,8 @@ x-common-env: &common-env
   HTTP_ADDR: ":8080"
   CLICKHOUSE_ADDR: clickhouse:9000
   REDIS_ADDR: redis:6379
+  STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+  STRIPE_PRICE_ID: ${STRIPE_PRICE_ID}
 services:
   kafka-init:
       image: apache/kafka:3.9.0

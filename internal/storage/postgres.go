@@ -301,3 +301,13 @@ func (s *Store) CreateSubscription(ctx context.Context, userID int64, planName s
 	}
 	return nil
 }
+
+func (s *Store) SetStripeCustomer(ctx context.Context, userID int64, stripeCustomerID string) error {
+	const q = `UPDATE subscriptions SET stripe_customer_id = $1, updated_at = now() WHERE user_id = $2`
+
+	_, err := s.pool.Exec(ctx, q, stripeCustomerID, userID)
+	if err != nil {
+		return fmt.Errorf("set stripe customer: %w", err)
+	}
+	return nil
+}

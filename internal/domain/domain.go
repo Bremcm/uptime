@@ -60,7 +60,9 @@ type Plan struct {
 }
 
 type Subscription struct {
-	UserID int64
-	Plan   Plan
-	Status string
+	UserID               int64
+	Plan                 Plan
+	Status               string
+	StripeCustomerID     *string
+	StripeSubscriptionID *string
 }

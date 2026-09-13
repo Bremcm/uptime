@@ -15,6 +15,8 @@ import (
 	"github.com/Bremcm/uptime/internal/domain"
 	"github.com/Bremcm/uptime/internal/storage"
 	"github.com/labstack/echo/v4"
+	"github.com/stripe/stripe-go/v81"
+	"github.com/stripe/stripe-go/v81/client"
 )
 
 type store interface {
@@ -27,6 +29,7 @@ type store interface {
 	UpdateUserTelegramChatID(ctx context.Context, userID int64, chatID string) error
 	CreateSubscription(ctx context.Context, userID int64, planName string) error
 	SubscriptionByUser(ctx context.Context, userID int64) (domain.Subscription, error)
+	SetStripeCustomer(ctx context.Context, userID int64, stripeCustomerID string) error
 }
 
 type analytics interface {
@@ -60,19 +63,21 @@ type authResponse struct {
 }
 
 type Server struct {
-	echo    *echo.Echo
-	store   store
-	tokens  *auth.TokenManager
-	stats   analytics
-	cache   cache
-	billing billing
+	echo            *echo.Echo
+	store           store
+	tokens          *auth.TokenManager
+	stats           analytics
+	cache           cache
+	billing         billing
+	stripeSecretKey string
+	stripePriceID   string
 }
 
-func NewServer(st store, tokens *auth.TokenManager, stats analytics, cache cache, billing billing) *Server {
+func NewServer(st store, tokens *auth.TokenManager, stats analytics, cache cache, billing billing, stripeSecretKey, stripePriceID string) *Server {
 	e := echo.New()
 	e.HideBanner = true
 
-	s := &Server{echo: e, store: st, tokens: tokens, stats: stats, cache: cache, billing: billing}
+	s := &Server{echo: e, store: st, tokens: tokens, stats: stats, cache: cache, billing: billing, stripeSecretKey: stripeSecretKey, stripePriceID: stripePriceID}
 	s.routes()
 	return s
 }
@@ -87,6 +92,7 @@ func (s *Server) routes() {
 	api.Use(s.authMiddleware)
 	api.Use(s.rateLimitMiddleware)
 	api.POST("/monitors", s.handleCreateMonitor)
+	api.POST("/billing/checkout", s.handleCreateCheckout)
 	api.GET("/monitors", s.handleListMonitors)
 	api.GET("/monitors/:id/checks", s.handleMonitorChecks)
 	api.GET("/monitors/:id/stats", s.handleMonitorStats)
@@ -348,4 +354,52 @@ func (s *Server) handleSetTelegram(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "could not update telegram")
 	}
 	return c.NoContent(http.StatusNoContent)
+}
+
+func (s *Server) handleCreateCheckout(c echo.Context) error {
+	ctx := c.Request().Context()
+	userID := userIDFrom(c)
+
+	sub, err := s.store.SubscriptionByUser(ctx, userID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "could not load subscription")
+	}
+
+	sc := &client.API{}
+	sc.Init(s.stripeSecretKey, nil)
+
+	customerID := ""
+	if sub.StripeCustomerID != nil {
+		customerID = *sub.StripeCustomerID
+	} else {
+		cust, err := sc.Customers.New(&stripe.CustomerParams{
+			Params: stripe.Params{Context: ctx},
+		})
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "could not create stripe customer")
+		}
+		customerID = cust.ID
+		if err := s.store.SetStripeCustomer(ctx, userID, customerID); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "could not save stripe customer")
+		}
+	}
+
+	session, err := sc.CheckoutSessions.New(&stripe.CheckoutSessionParams{
+		Params:   stripe.Params{Context: ctx},
+		Customer: stripe.String(customerID),
+		Mode:     stripe.String(string(stripe.CheckoutSessionModeSubscription)),
+		LineItems: []*stripe.CheckoutSessionLineItemParams{
+			{
+				Price:    stripe.String(s.stripePriceID),
+				Quantity: stripe.Int64(1),
+			},
+		},
+		SuccessURL: stripe.String("http://localhost:8080/billing/success"),
+		CancelURL:  stripe.String("http://localhost:8080/billing/cancel"),
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "could not create checkout session")
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{"url": session.URL})
 }

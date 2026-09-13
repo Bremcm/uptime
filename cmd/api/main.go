@@ -70,7 +70,7 @@ func main() {
 	}
 	scheduler := monitor.NewScheduler(store, publish, redisClient, cfg.ChecksTopic, log, cfg.SchedulerTick)
 	tokenManager := auth.NewTokenManager(cfg.JWTSecret, 24*time.Hour)
-	srv := httpserver.NewServer(store, tokenManager, chClient, redisClient, billingClient)
+	srv := httpserver.NewServer(store, tokenManager, chClient, redisClient, billingClient, cfg.StripeSecretKey, cfg.StripePriceID)
 	go func() {
 		log.Info("http server starting", "addr", cfg.HTTPAddr)
 		if err := srv.Start(cfg.HTTPAddr); err != nil {

@@ -24,6 +24,8 @@ type Config struct {
 	RedisAddr               string
 	BillingGRPCAddr         string
 	BillingClientAddr       string
+	StripeSecretKey         string
+	StripePriceID           string
 	ClickHouseBatchSize     int
 	ClickHouseFlushInterval time.Duration
 	SchedulerWorkers        int
@@ -63,6 +65,8 @@ func Load() (*Config, error) {
 	cfg.TelegramToken = os.Getenv("TELEGRAM_TOKEN")
 	cfg.TelegramChatID = os.Getenv("TELEGRAM_CHAT_ID")
 	cfg.BillingClientAddr = getEnv("BILLING_CLIENT_ADDR", "billing:50051")
+	cfg.StripeSecretKey = os.Getenv("STRIPE_SECRET_KEY")
+	cfg.StripePriceID = os.Getenv("STRIPE_PRICE_ID")
 
 	return cfg, nil
 }
