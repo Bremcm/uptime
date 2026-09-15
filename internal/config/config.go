@@ -26,6 +26,7 @@ type Config struct {
 	BillingClientAddr       string
 	StripeSecretKey         string
 	StripePriceID           string
+	StripeWebhookSecret     string
 	ClickHouseBatchSize     int
 	ClickHouseFlushInterval time.Duration
 	SchedulerWorkers        int
@@ -67,6 +68,7 @@ func Load() (*Config, error) {
 	cfg.BillingClientAddr = getEnv("BILLING_CLIENT_ADDR", "billing:50051")
 	cfg.StripeSecretKey = os.Getenv("STRIPE_SECRET_KEY")
 	cfg.StripePriceID = os.Getenv("STRIPE_PRICE_ID")
+	cfg.StripeWebhookSecret = os.Getenv("STRIPE_WEBHOOK_SECRET")
 
 	return cfg, nil
 }

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/stripe/stripe-go/v81"
 	"github.com/stripe/stripe-go/v81/client"
+	"github.com/stripe/stripe-go/v81/webhook"
 )
 
 type store interface {
@@ -30,6 +32,7 @@ type store interface {
 	CreateSubscription(ctx context.Context, userID int64, planName string) error
 	SubscriptionByUser(ctx context.Context, userID int64) (domain.Subscription, error)
 	SetStripeCustomer(ctx context.Context, userID int64, stripeCustomerID string) error
+	UpdateSubscriptionByStripeCustomer(ctx context.Context, stripeCustomerID, planName, status string) error
 }
 
 type analytics interface {
@@ -63,27 +66,29 @@ type authResponse struct {
 }
 
 type Server struct {
-	echo            *echo.Echo
-	store           store
-	tokens          *auth.TokenManager
-	stats           analytics
-	cache           cache
-	billing         billing
-	stripeSecretKey string
-	stripePriceID   string
+	echo                *echo.Echo
+	store               store
+	tokens              *auth.TokenManager
+	stats               analytics
+	cache               cache
+	billing             billing
+	stripeSecretKey     string
+	stripePriceID       string
+	stripeWebhookSecret string
 }
 
-func NewServer(st store, tokens *auth.TokenManager, stats analytics, cache cache, billing billing, stripeSecretKey, stripePriceID string) *Server {
+func NewServer(st store, tokens *auth.TokenManager, stats analytics, cache cache, billing billing, stripeSecretKey, stripePriceID, stripeWebhookSecret string) *Server {
 	e := echo.New()
 	e.HideBanner = true
 
-	s := &Server{echo: e, store: st, tokens: tokens, stats: stats, cache: cache, billing: billing, stripeSecretKey: stripeSecretKey, stripePriceID: stripePriceID}
+	s := &Server{echo: e, store: st, tokens: tokens, stats: stats, cache: cache, billing: billing, stripeSecretKey: stripeSecretKey, stripePriceID: stripePriceID, stripeWebhookSecret: stripeWebhookSecret}
 	s.routes()
 	return s
 }
 
 func (s *Server) routes() {
 	s.echo.GET("/healthz", s.handleHealth)
+	s.echo.POST("/webhooks/stripe", s.handleStripeWebhook)
 
 	s.echo.POST("/api/v1/auth/register", s.handleRegister)
 	s.echo.POST("/api/v1/auth/login", s.handleLogin)
@@ -402,4 +407,43 @@ func (s *Server) handleCreateCheckout(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"url": session.URL})
+}
+
+func (s *Server) handleStripeWebhook(c echo.Context) error {
+	payload, err := io.ReadAll(c.Request().Body)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "could not read body")
+	}
+
+	event, err := webhook.ConstructEventWithOptions(payload, c.Request().Header.Get("Stripe-Signature"), s.stripeWebhookSecret, webhook.ConstructEventOptions{
+		IgnoreAPIVersionMismatch: true,
+		Tolerance:                24 * time.Hour,
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid signature")
+	}
+
+	ctx := c.Request().Context()
+	dedupKey := fmt.Sprintf("stripe:event:%s", event.ID)
+	acquired, err := s.cache.SetNX(ctx, dedupKey, 24*time.Hour)
+	if err == nil && !acquired {
+		return c.NoContent(http.StatusOK)
+	}
+
+	switch event.Type {
+	case "checkout.session.completed":
+		var session stripe.CheckoutSession
+		if err := json.Unmarshal(event.Data.Raw, &session); err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "invalid event payload")
+		}
+		if session.Customer == nil {
+			return c.NoContent(http.StatusOK)
+		}
+		customerID := session.Customer.ID
+		if err := s.store.UpdateSubscriptionByStripeCustomer(ctx, customerID, "pro", "active"); err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "could not update subscription")
+		}
+	}
+
+	return c.NoContent(http.StatusOK)
 }

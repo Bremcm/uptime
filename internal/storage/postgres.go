@@ -311,3 +311,18 @@ func (s *Store) SetStripeCustomer(ctx context.Context, userID int64, stripeCusto
 	}
 	return nil
 }
+
+func (s *Store) UpdateSubscriptionByStripeCustomer(ctx context.Context, stripeCustomerID, planName, status string) error {
+	const q = `
+		UPDATE subscriptions
+		SET plan_id = (SELECT id FROM plans WHERE name = $1),
+		    status = $2,
+		    updated_at = now()
+		WHERE stripe_customer_id = $3`
+
+	_, err := s.pool.Exec(ctx, q, planName, status, stripeCustomerID)
+	if err != nil {
+		return fmt.Errorf("update subscription by stripe customer: %w", err)
+	}
+	return nil
+}
