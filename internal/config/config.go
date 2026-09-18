@@ -27,6 +27,7 @@ type Config struct {
 	StripeSecretKey         string
 	StripePriceID           string
 	StripeWebhookSecret     string
+	JaegerAddr              string
 	ClickHouseBatchSize     int
 	ClickHouseFlushInterval time.Duration
 	SchedulerWorkers        int
@@ -69,6 +70,7 @@ func Load() (*Config, error) {
 	cfg.StripeSecretKey = os.Getenv("STRIPE_SECRET_KEY")
 	cfg.StripePriceID = os.Getenv("STRIPE_PRICE_ID")
 	cfg.StripeWebhookSecret = os.Getenv("STRIPE_WEBHOOK_SECRET")
+	cfg.JaegerAddr = getEnv("JAEGER_ADDR", "jaeger:4317")
 
 	return cfg, nil
 }

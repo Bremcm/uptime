@@ -19,6 +19,7 @@ import (
 	"github.com/stripe/stripe-go/v81"
 	"github.com/stripe/stripe-go/v81/client"
 	"github.com/stripe/stripe-go/v81/webhook"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 )
 
 type store interface {
@@ -79,6 +80,7 @@ type Server struct {
 
 func NewServer(st store, tokens *auth.TokenManager, stats analytics, cache cache, billing billing, stripeSecretKey, stripePriceID, stripeWebhookSecret string) *Server {
 	e := echo.New()
+	e.Use(otelecho.Middleware("api"))
 	e.HideBanner = true
 
 	s := &Server{echo: e, store: st, tokens: tokens, stats: stats, cache: cache, billing: billing, stripeSecretKey: stripeSecretKey, stripePriceID: stripePriceID, stripeWebhookSecret: stripeWebhookSecret}
