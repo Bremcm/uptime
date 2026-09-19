@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/twmb/franz-go/pkg/kgo"
+	"go.opentelemetry.io/otel"
 )
 
 type Producer struct {
@@ -37,6 +38,8 @@ func Publish[T Keyer](ctx context.Context, p *Producer, topic string, msg T) err
 		Key:   []byte(msg.Key()),
 		Value: value,
 	}
+
+	otel.GetTextMapPropagator().Inject(ctx, kafkaHeaderCarrier{headers: &record.Headers})
 
 	if err := p.client.ProduceSync(ctx, record).FirstErr(); err != nil {
 		return fmt.Errorf("produce message: %w", err)

@@ -7,6 +7,7 @@ import (
 
 	"github.com/Bremcm/uptime/internal/domain"
 	"github.com/Bremcm/uptime/internal/events"
+	"go.opentelemetry.io/otel"
 )
 
 type publishFunc func(ctx context.Context, topic string, job events.CheckJob) error
@@ -82,7 +83,12 @@ func (s *Scheduler) runOnce(ctx context.Context) {
 		}
 
 		job := events.CheckJob{MonitorID: m.ID, URL: m.URL}
-		if err := s.publisher(ctx, s.topic, job); err != nil {
+
+		spanCtx, span := otel.Tracer("scheduler").Start(ctx, "scheduler.publish")
+		err := s.publisher(spanCtx, s.topic, job)
+		span.End()
+
+		if err != nil {
 			s.log.Error("failed to publish check job", "monitor", m.ID, "error", err)
 			continue
 		}

@@ -12,6 +12,7 @@ import (
 	"github.com/Bremcm/uptime/internal/events"
 	"github.com/Bremcm/uptime/internal/monitor"
 	"github.com/Bremcm/uptime/internal/storage"
+	"github.com/Bremcm/uptime/internal/tracing"
 )
 
 func main() {
@@ -25,6 +26,17 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	shutdownTracing, err := tracing.Setup(ctx, "checker", cfg.JaegerAddr)
+	if err != nil {
+		log.Error("failed to setup tracing", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := shutdownTracing(context.Background()); err != nil {
+			log.Error("failed to shutdown tracing", "error", err)
+		}
+	}()
 
 	store, err := storage.New(ctx, cfg.DatabaseURL)
 	if err != nil {

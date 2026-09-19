@@ -8,7 +8,10 @@ import (
 	"time"
 
 	"github.com/twmb/franz-go/pkg/kgo"
+	"go.opentelemetry.io/otel"
 )
+
+var tracer = otel.Tracer("events")
 
 type Consumer struct {
 	client *kgo.Client
@@ -43,13 +46,17 @@ func Consume[T any](ctx context.Context, c *Consumer, handle func(context.Contex
 		}
 
 		fetches.EachRecord(func(r *kgo.Record) {
+			msgCtx := otel.GetTextMapPropagator().Extract(ctx, kafkaHeaderCarrier{headers: &r.Headers})
+			msgCtx, span := tracer.Start(msgCtx, "kafka.consume")
+			defer span.End()
+
 			var msg T
 			if err := json.Unmarshal(r.Value, &msg); err != nil {
 				c.log.Error("skipping malformed message", "error", err, "offset", r.Offset)
 				return
 			}
 
-			if err := handleWithRetry(ctx, handle, msg, c.log); err != nil {
+			if err := handleWithRetry(msgCtx, handle, msg, c.log); err != nil {
 				c.log.Error("message dropped after retries (would go to DLQ)",
 					"error", err, "offset", r.Offset, "partition", r.Partition)
 			}
