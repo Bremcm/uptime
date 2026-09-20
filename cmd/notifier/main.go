@@ -28,7 +28,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	shutdownTracing, err := tracing.Setup(ctx, "checker", cfg.JaegerAddr)
+	shutdownTracing, err := tracing.Setup(ctx, "notifier", cfg.JaegerAddr)
 	if err != nil {
 		log.Error("failed to setup tracing", "error", err)
 		os.Exit(1)
