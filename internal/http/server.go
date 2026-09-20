@@ -20,6 +20,7 @@ import (
 	"github.com/stripe/stripe-go/v81/client"
 	"github.com/stripe/stripe-go/v81/webhook"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
+	"go.opentelemetry.io/otel/metric"
 )
 
 type store interface {
@@ -76,6 +77,8 @@ type Server struct {
 	stripeSecretKey     string
 	stripePriceID       string
 	stripeWebhookSecret string
+	requestCounter      metric.Int64Counter
+	requestDuration     metric.Float64Histogram
 }
 
 func NewServer(st store, tokens *auth.TokenManager, stats analytics, cache cache, billing billing, stripeSecretKey, stripePriceID, stripeWebhookSecret string) *Server {
@@ -112,6 +115,10 @@ func (s *Server) Start(addr string) error {
 
 func (s *Server) handleHealth(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (s *Server) Echo() *echo.Echo {
+	return s.echo
 }
 
 type createMonitorRequest struct {
@@ -448,4 +455,23 @@ func (s *Server) handleStripeWebhook(c echo.Context) error {
 	}
 
 	return c.NoContent(http.StatusOK)
+}
+
+func (s *Server) RegisterMetrics(meter metric.Meter) error {
+	counter, err := meter.Int64Counter("http_requests_total",
+		metric.WithDescription("Total number of HTTP requests"))
+	if err != nil {
+		return err
+	}
+	s.requestCounter = counter
+
+	duration, err := meter.Float64Histogram("http_request_duration_seconds",
+		metric.WithDescription("HTTP request duration in seconds"))
+	if err != nil {
+		return err
+	}
+	s.requestDuration = duration
+
+	s.echo.Use(s.metricsMiddleware)
+	return nil
 }

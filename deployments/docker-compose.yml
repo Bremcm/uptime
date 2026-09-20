@@ -133,6 +133,13 @@ services:
       - "4317:4317"
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: uptime-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
   api:
     build:
       context: ..

@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/labstack/echo/v4"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 )
 
 const userIDKey = "userID"
@@ -74,4 +76,26 @@ func (s *Server) rateLimitFor(ctx context.Context, userID int64) int {
 
 	_ = s.cache.Set(ctx, cacheKey, strconv.Itoa(limits.RateLimitPerMinute), time.Minute)
 	return limits.RateLimitPerMinute
+}
+
+func (s *Server) metricsMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		start := time.Now()
+
+		err := next(c)
+
+		duration := time.Since(start).Seconds()
+		status := c.Response().Status
+
+		attrs := metric.WithAttributes(
+			attribute.String("method", c.Request().Method),
+			attribute.String("path", c.Path()),
+			attribute.Int("status", status),
+		)
+
+		s.requestCounter.Add(c.Request().Context(), 1, attrs)
+		s.requestDuration.Record(c.Request().Context(), duration, attrs)
+
+		return err
+	}
 }

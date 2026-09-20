@@ -14,6 +14,7 @@ import (
 	"github.com/Bremcm/uptime/internal/config"
 	"github.com/Bremcm/uptime/internal/events"
 	httpserver "github.com/Bremcm/uptime/internal/http"
+	"github.com/Bremcm/uptime/internal/metrics"
 	"github.com/Bremcm/uptime/internal/monitor"
 	"github.com/Bremcm/uptime/internal/redis"
 	"github.com/Bremcm/uptime/internal/storage"
@@ -83,6 +84,12 @@ func main() {
 	scheduler := monitor.NewScheduler(store, publish, redisClient, cfg.ChecksTopic, log, cfg.SchedulerTick)
 	tokenManager := auth.NewTokenManager(cfg.JWTSecret, 24*time.Hour)
 	srv := httpserver.NewServer(store, tokenManager, chClient, redisClient, billingClient, cfg.StripeSecretKey, cfg.StripePriceID, cfg.StripeWebhookSecret)
+	meter, err := metrics.Setup(srv.Echo())
+	if err != nil {
+		log.Error("failed to setup metrics", "error", err)
+		os.Exit(1)
+	}
+	srv.RegisterMetrics(meter)
 	go func() {
 		log.Info("http server starting", "addr", cfg.HTTPAddr)
 		if err := srv.Start(cfg.HTTPAddr); err != nil {
