@@ -1,0 +1,40 @@
+{
+  "title": "Uptime Overview",
+  "uid": "uptime-overview",
+  "schemaVersion": 39,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request Rate",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "rate(http_requests_total[1m])",
+          "legendFormat": "{{method}} {{path}} ({{status}})"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "P95 Latency",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))",
+          "legendFormat": "{{method}} {{path}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Active Monitors",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 8, "w": 6, "h": 6 },
+      "targets": [
+        { "expr": "active_monitors" }
+      ]
+    }
+  ]
+}
