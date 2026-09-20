@@ -326,3 +326,13 @@ func (s *Store) UpdateSubscriptionByStripeCustomer(ctx context.Context, stripeCu
 	}
 	return nil
 }
+
+func (s *Store) CountEnabledMonitors(ctx context.Context) (int64, error) {
+	const q = `SELECT COUNT(*) FROM monitors WHERE enabled = true`
+
+	var count int64
+	if err := s.pool.QueryRow(ctx, q).Scan(&count); err != nil {
+		return 0, fmt.Errorf("count enabled monitors: %w", err)
+	}
+	return count, nil
+}

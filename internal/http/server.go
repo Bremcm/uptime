@@ -35,6 +35,7 @@ type store interface {
 	SubscriptionByUser(ctx context.Context, userID int64) (domain.Subscription, error)
 	SetStripeCustomer(ctx context.Context, userID int64, stripeCustomerID string) error
 	UpdateSubscriptionByStripeCustomer(ctx context.Context, stripeCustomerID, planName, status string) error
+	CountEnabledMonitors(ctx context.Context) (int64, error)
 }
 
 type analytics interface {
@@ -472,6 +473,20 @@ func (s *Server) RegisterMetrics(meter metric.Meter) error {
 	}
 	s.requestDuration = duration
 
+	_, err = meter.Int64ObservableGauge("active_monitors",
+		metric.WithDescription("Number of currently enabled monitors"),
+		metric.WithInt64Callback(func(ctx context.Context, o metric.Int64Observer) error {
+			count, err := s.store.CountEnabledMonitors(ctx)
+			if err != nil {
+				return err
+			}
+			o.Observe(count)
+			return nil
+		}),
+	)
+	if err != nil {
+		return err
+	}
 	s.echo.Use(s.metricsMiddleware)
 	return nil
 }
