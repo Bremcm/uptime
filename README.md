@@ -56,7 +56,7 @@ flowchart LR
 | RPC | gRPC + Protocol Buffers (buf) |
 | Payments | Stripe (Checkout + Webhooks) |
 | Observability | OpenTelemetry, Jaeger, Prometheus, Grafana |
-| Infra | Docker Compose, GitHub Actions |
+| Infra | Docker Compose, GitHub Actions, k8s |
 
 ## Services
 

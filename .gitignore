@@ -4,6 +4,8 @@
 
 # Секреты — сюда потом лягут пароли к базе, ключи. В гит НИКОГДА.
 .env
+k8s/*-secret.yaml
+!k8s/*-secret.yaml.example
 
 # Мусор macOS
 .DS_Store
