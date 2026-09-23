@@ -90,13 +90,13 @@ This starts Postgres, Kafka, Redis, ClickHouse, Jaeger, Prometheus, Grafana, and
 
 ## API overview
 
-POST /api/v1/auth/register
-POST /api/v1/auth/login
-POST /api/v1/monitors
-GET /api/v1/monitors
-GET /api/v1/monitors/:id/checks
-GET /api/v1/monitors/:id/stats # hourly latency/uptime from ClickHouse
-POST /api/v1/billing/checkout # Stripe Checkout Session
-POST /webhooks/stripe
+- POST /api/v1/auth/register
+- POST /api/v1/auth/login
+- POST /api/v1/monitors
+- GET /api/v1/monitors
+- GET /api/v1/monitors/:id/checks
+- GET /api/v1/monitors/:id/stats # hourly latency/uptime from ClickHouse
+- POST /api/v1/billing/checkout # Stripe Checkout Session
+- POST /webhooks/stripe
 
 
