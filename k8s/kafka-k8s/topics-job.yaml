@@ -1,0 +1,19 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-topics-init
+spec:
+  backoffLimit: 4
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: create-topics
+          image: apache/kafka:3.9.0
+          command:
+            - /bin/sh
+            - -c
+            - |
+              /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic checks --partitions 3 --replication-factor 1
+              /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic check-results --partitions 3 --replication-factor 1
+              /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic incidents --partitions 3 --replication-factor 1
