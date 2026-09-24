@@ -1,0 +1,119 @@
+apiVersion: v1
+data:
+  20260724220203_init.sql: |-
+    -- +goose Up
+    -- +goose StatementBegin
+    CREATE TABLE users (
+        id            BIGSERIAL PRIMARY KEY,
+        email         TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE monitors (
+        id               BIGSERIAL PRIMARY KEY,
+        user_id          BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name             TEXT NOT NULL,
+        url              TEXT NOT NULL,
+        interval_seconds INT NOT NULL DEFAULT 300,
+        enabled          BOOLEAN NOT NULL DEFAULT true,
+        created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE checks (
+        id          BIGSERIAL PRIMARY KEY,
+        monitor_id  BIGINT NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
+        status      TEXT NOT NULL,
+        status_code INT NOT NULL DEFAULT 0,
+        latency_ms  INT NOT NULL DEFAULT 0,
+        error       TEXT NOT NULL DEFAULT '',
+        checked_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    CREATE INDEX idx_checks_monitor_time ON checks (monitor_id, checked_at DESC);
+    -- +goose StatementEnd
+
+    -- +goose Down
+    -- +goose StatementBegin
+    DROP TABLE IF EXISTS checks;
+    DROP TABLE IF EXISTS monitors;
+    DROP TABLE IF EXISTS users;
+    -- +goose StatementEnd
+  20260729182447_add_incidents.sql: |-
+    -- +goose Up
+    -- +goose StatementBegin
+    CREATE TABLE incidents (
+        id          BIGSERIAL PRIMARY KEY,
+        monitor_id  BIGINT NOT NULL REFERENCES monitors(id) ON DELETE CASCADE,
+        started_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+        resolved_at TIMESTAMPTZ
+    );
+
+    CREATE INDEX idx_incidents_monitor_open
+        ON incidents (monitor_id)
+        WHERE resolved_at IS NULL;
+    -- +goose StatementEnd
+
+    -- +goose Down
+    -- +goose StatementBegin
+    DROP TABLE IF EXISTS incidents;
+    -- +goose StatementEnd
+  20260730180248_add_user_telegram.sql: |-
+    -- +goose Up
+    -- +goose StatementBegin
+    ALTER TABLE users ADD COLUMN telegram_chat_id TEXT NOT NULL DEFAULT '';
+    -- +goose StatementEnd
+
+    -- +goose Down
+    -- +goose StatementBegin
+    ALTER TABLE users DROP COLUMN telegram_chat_id;
+    -- +goose StatementEnd
+  20260930120000_add_billing.sql: |-
+    -- +goose Up
+    -- +goose StatementBegin
+    CREATE TABLE plans (
+        id                    BIGSERIAL PRIMARY KEY,
+        name                  TEXT NOT NULL UNIQUE,
+        max_monitors          INT NOT NULL,
+        min_interval_seconds  INT NOT NULL,
+        rate_limit_per_minute INT NOT NULL
+    );
+
+    CREATE TABLE subscriptions (
+        id         BIGSERIAL PRIMARY KEY,
+        user_id    BIGINT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+        plan_id    BIGINT NOT NULL REFERENCES plans(id),
+        status     TEXT NOT NULL DEFAULT 'active',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    INSERT INTO plans (name, max_monitors, min_interval_seconds, rate_limit_per_minute) VALUES
+        ('free', 3,  300, 100),
+        ('pro',  50, 30,  1000);
+    -- +goose StatementEnd
+
+    -- +goose Down
+    -- +goose StatementBegin
+    DROP TABLE IF EXISTS subscriptions;
+    DROP TABLE IF EXISTS plans;
+    -- +goose StatementEnd
+  20260944331144_add_stripe_fields.sql: |-
+    -- +goose Up
+    -- +goose StatementBegin
+    ALTER TABLE subscriptions ADD COLUMN stripe_customer_id TEXT;
+    ALTER TABLE subscriptions ADD COLUMN stripe_subscription_id TEXT;
+    CREATE UNIQUE INDEX idx_subscriptions_stripe_customer ON subscriptions(stripe_customer_id) WHERE stripe_customer_id IS NOT NULL;
+    CREATE UNIQUE INDEX idx_subscriptions_stripe_subscription ON subscriptions(stripe_subscription_id) WHERE stripe_subscription_id IS NOT NULL;
+    -- +goose StatementEnd
+
+    -- +goose Down
+    -- +goose StatementBegin
+    DROP INDEX IF EXISTS idx_subscriptions_stripe_subscription;
+    DROP INDEX IF EXISTS idx_subscriptions_stripe_customer;
+    ALTER TABLE subscriptions DROP COLUMN stripe_subscription_id;
+    ALTER TABLE subscriptions DROP COLUMN stripe_customer_id;
+    -- +goose StatementEnd
+kind: ConfigMap
+metadata:
+  name: migrations-sql
