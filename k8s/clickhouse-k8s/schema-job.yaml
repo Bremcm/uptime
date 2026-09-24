@@ -1,0 +1,24 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: clickhouse-schema-init
+spec:
+  backoffLimit: 4
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: init-schema
+          image: clickhouse/clickhouse-server:24.8
+          command:
+            - /bin/sh
+            - -c
+            - "clickhouse-client --host clickhouse --queries-file /init.sql"
+          volumeMounts:
+            - name: init-sql
+              mountPath: /init.sql
+              subPath: init.sql
+      volumes:
+        - name: init-sql
+          configMap:
+            name: clickhouse-init-sql

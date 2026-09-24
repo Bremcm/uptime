@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clickhouse
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: clickhouse
+  template:
+    metadata:
+      labels:
+        app: clickhouse
+    spec:
+      containers:
+        - name: clickhouse
+          image: clickhouse/clickhouse-server:24.8
+          ports:
+            - containerPort: 8123
+            - containerPort: 9000
+          volumeMounts:
+            - name: clickhouse-storage
+              mountPath: /var/lib/clickhouse
+            - name: users-xml
+              mountPath: /etc/clickhouse-server/users.d/override.xml
+              subPath: override.xml
+      volumes:
+        - name: clickhouse-storage
+          persistentVolumeClaim:
+            claimName: clickhouse-pvc
+        - name: users-xml
+          configMap:
+            name: clickhouse-users-xml

@@ -1,0 +1,15 @@
+apiVersion: v1
+data:
+  override.xml: |-
+    <clickhouse>
+      <users>
+        <default>
+          <networks>
+            <ip>::/0</ip>
+          </networks>
+        </default>
+      </users>
+    </clickhouse>
+kind: ConfigMap
+metadata:
+  name: clickhouse-users-xml
