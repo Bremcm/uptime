@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Bremcm/uptime/internal/auth"
@@ -36,6 +37,7 @@ type store interface {
 	SetStripeCustomer(ctx context.Context, userID int64, stripeCustomerID string) error
 	UpdateSubscriptionByStripeCustomer(ctx context.Context, stripeCustomerID, planName, status string) error
 	CountEnabledMonitors(ctx context.Context) (int64, error)
+	UpdateUserNotificationEmail(ctx context.Context, userID int64, email string) error
 }
 
 type analytics interface {
@@ -108,6 +110,7 @@ func (s *Server) routes() {
 	api.GET("/monitors/:id/checks", s.handleMonitorChecks)
 	api.GET("/monitors/:id/stats", s.handleMonitorStats)
 	api.PUT("/me/telegram", s.handleSetTelegram)
+	api.PUT("/me/notification-email", s.handleSetNotificationEmail)
 }
 
 func (s *Server) Start(addr string) error {
@@ -367,6 +370,25 @@ func (s *Server) handleSetTelegram(c echo.Context) error {
 
 	if err := s.store.UpdateUserTelegramChatID(c.Request().Context(), userIDFrom(c), req.ChatID); err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "could not update telegram")
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+type setNotificationEmailRequest struct {
+	Email string `json:"email"`
+}
+
+func (s *Server) handleSetNotificationEmail(c echo.Context) error {
+	var req setNotificationEmailRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	if req.Email == "" || !strings.Contains(req.Email, "@") {
+		return echo.NewHTTPError(http.StatusBadRequest, "valid email is required")
+	}
+
+	if err := s.store.UpdateUserNotificationEmail(c.Request().Context(), userIDFrom(c), req.Email); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "could not update notification email")
 	}
 	return c.NoContent(http.StatusNoContent)
 }

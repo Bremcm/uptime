@@ -117,12 +117,12 @@ func (s *Store) CreateUser(ctx context.Context, email, passwordHash string) (dom
 
 func (s *Store) UserByEmail(ctx context.Context, email string) (domain.User, error) {
 	const q = `
-		SELECT id, email, password_hash, telegram_chat_id, created_at
+		SELECT id, email, password_hash, telegram_chat_id, notification_email, created_at
 		FROM users
 		WHERE email = $1`
 
 	var u domain.User
-	err := s.pool.QueryRow(ctx, q, email).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.TelegramChatID, &u.CreatedAt)
+	err := s.pool.QueryRow(ctx, q, email).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.TelegramChatID, &u.NotificationEmail, &u.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.User{}, ErrUserNotFound
@@ -134,12 +134,12 @@ func (s *Store) UserByEmail(ctx context.Context, email string) (domain.User, err
 
 func (s *Store) UserByID(ctx context.Context, id int64) (domain.User, error) {
 	const q = `
-		SELECT id, email, password_hash, telegram_chat_id, created_at
+		SELECT id, email, password_hash, telegram_chat_id, notification_email, created_at
 		FROM users
 		WHERE id = $1`
 
 	var u domain.User
-	err := s.pool.QueryRow(ctx, q, id).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.TelegramChatID, &u.CreatedAt)
+	err := s.pool.QueryRow(ctx, q, id).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.TelegramChatID, &u.NotificationEmail, &u.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.User{}, ErrUserNotFound
@@ -263,6 +263,15 @@ func (s *Store) UpdateUserTelegramChatID(ctx context.Context, userID int64, chat
 	_, err := s.pool.Exec(ctx, q, chatID, userID)
 	if err != nil {
 		return fmt.Errorf("update telegram chat id: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) UpdateUserNotificationEmail(ctx context.Context, userID int64, email string) error {
+	const q = `UPDATE users SET notification_email = $1 WHERE id = $2`
+	_, err := s.pool.Exec(ctx, q, email, userID)
+	if err != nil {
+		return fmt.Errorf("update notification email: %w", err)
 	}
 	return nil
 }

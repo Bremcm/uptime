@@ -33,11 +33,12 @@ type Check struct {
 }
 
 type User struct {
-	ID             int64
-	Email          string
-	PasswordHash   string
-	TelegramChatID string
-	CreatedAt      time.Time
+	ID                int64
+	Email             string
+	PasswordHash      string
+	TelegramChatID    string
+	NotificationEmail string
+	CreatedAt         time.Time
 }
 
 type Incident struct {

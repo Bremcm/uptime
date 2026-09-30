@@ -16,6 +16,11 @@ type Config struct {
 	HTTPAddr                string
 	TelegramToken           string
 	TelegramChatID          string
+	SMTPHost                string
+	SMTPPort                string
+	SMTPUsername            string
+	SMTPPassword            string
+	SMTPFrom                string
 	KafkaBrokers            []string
 	ChecksTopic             string
 	ResultsTopic            string
@@ -66,6 +71,11 @@ func Load() (*Config, error) {
 	cfg.ResultsTopic = getEnv("RESULTS_TOPIC", "check-results")
 	cfg.TelegramToken = os.Getenv("TELEGRAM_TOKEN")
 	cfg.TelegramChatID = os.Getenv("TELEGRAM_CHAT_ID")
+	cfg.SMTPHost = getEnv("SMTP_HOST", "")
+	cfg.SMTPPort = getEnv("SMTP_PORT", "587")
+	cfg.SMTPUsername = getEnv("SMTP_USERNAME", "")
+	cfg.SMTPPassword = getEnv("SMTP_PASSWORD", "")
+	cfg.SMTPFrom = getEnv("SMTP_FROM", "")
 	cfg.BillingClientAddr = getEnv("BILLING_CLIENT_ADDR", "billing:50051")
 	cfg.StripeSecretKey = os.Getenv("STRIPE_SECRET_KEY")
 	cfg.StripePriceID = os.Getenv("STRIPE_PRICE_ID")

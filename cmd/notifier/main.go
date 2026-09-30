@@ -40,6 +40,7 @@ func main() {
 	}()
 
 	telegram := notifier.NewTelegram(cfg.TelegramToken)
+	email := notifier.NewEmail(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPFrom)
 
 	redisClient, err := redis.New(ctx, cfg.RedisAddr)
 	if err != nil {
@@ -69,9 +70,22 @@ func main() {
 			return nil
 		}
 
-		if err := telegram.NotifyFromEvent(ctx, event); err != nil {
-			log.Error("failed to notify", "incident", event.IncidentID, "error", err)
-			return err
+		var sendErr error
+		if event.ChatID != "" {
+			if err := telegram.NotifyFromEvent(ctx, event); err != nil {
+				log.Error("failed to notify via telegram", "incident", event.IncidentID, "error", err)
+				sendErr = err
+			}
+		}
+		if event.Email != "" {
+			if err := email.NotifyFromEvent(ctx, event); err != nil {
+				log.Error("failed to notify via email", "incident", event.IncidentID, "error", err)
+				sendErr = err
+			}
+		}
+
+		if sendErr != nil {
+			return sendErr
 		}
 		log.Info("notification sent", "incident", event.IncidentID, "resolved", event.Resolved)
 		return nil
