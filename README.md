@@ -88,6 +88,27 @@ This starts Postgres, Kafka, Redis, ClickHouse, Jaeger, Prometheus, Grafana, and
 - Prometheus: `http://localhost:9090`
 - Grafana: `http://localhost:3000`
 
+## Running on Kubernetes
+
+The entire stack also runs on Kubernetes (tested with [k3d](https://k3d.io), a lightweight way to run real k3s locally in Docker — the same distribution suitable for production).
+
+```bash
+k3d cluster create uptime-cluster --agents 2
+kubectl apply -f k8s/common-config.yaml
+kubectl apply -f k8s/common-secret.yaml   # copy from common-secret.yaml.example first
+kubectl apply -R -f k8s/
+```
+
+Manifests are organized per service (`k8s/<service>-k8s/`) and include:
+
+- **PersistentVolumeClaims** for Postgres, Kafka, and ClickHouse
+- **ConfigMap-mounted files** for the ClickHouse schema and network config
+- **Jobs** for one-off setup (Kafka topic creation, Postgres migrations, ClickHouse schema init)
+- **liveness/readiness probes** on `api`
+- **HorizontalPodAutoscaler** on `checker`, scaling 1→5 replicas on CPU
+
+Secrets are excluded from git (`k8s/**/secret.yaml` is gitignored); only `.example` templates are committed.
+
 ## API overview
 
 - POST /api/v1/auth/register
