@@ -25,6 +25,7 @@ type IncidentEvent struct {
 	MonitorURL  string     `json:"monitor_url"`
 	ChatID      string     `json:"chat_id"`
 	Email       string     `json:"email"`
+	WebhookURL  string     `json:"webhook_url"`
 	Resolved    bool       `json:"resolved"`
 	StartedAt   time.Time  `json:"started_at"`
 	ResolvedAt  *time.Time `json:"resolved_at"`

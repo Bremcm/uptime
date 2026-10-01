@@ -100,8 +100,7 @@ func (d *Detector) notify(ctx context.Context, monitorID int64, incident domain.
 		d.log.Error("load user for notification", "user", monitor.UserID, "error", err)
 		return
 	}
-
-	if user.TelegramChatID == "" && user.NotificationEmail == "" {
+	if user.TelegramChatID == "" && user.NotificationEmail == "" && user.WebhookURL == "" {
 		return
 	}
 
@@ -111,6 +110,7 @@ func (d *Detector) notify(ctx context.Context, monitorID int64, incident domain.
 		MonitorURL:  monitor.URL,
 		ChatID:      user.TelegramChatID,
 		Email:       user.NotificationEmail,
+		WebhookURL:  user.WebhookURL,
 		Resolved:    !incident.IsOpen(),
 		StartedAt:   incident.StartedAt,
 		ResolvedAt:  incident.ResolvedAt,

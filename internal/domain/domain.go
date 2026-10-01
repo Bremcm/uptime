@@ -38,6 +38,7 @@ type User struct {
 	PasswordHash      string
 	TelegramChatID    string
 	NotificationEmail string
+	WebhookURL        string
 	CreatedAt         time.Time
 }
 

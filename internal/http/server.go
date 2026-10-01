@@ -38,6 +38,7 @@ type store interface {
 	UpdateSubscriptionByStripeCustomer(ctx context.Context, stripeCustomerID, planName, status string) error
 	CountEnabledMonitors(ctx context.Context) (int64, error)
 	UpdateUserNotificationEmail(ctx context.Context, userID int64, email string) error
+	UpdateUserWebhookURL(ctx context.Context, userID int64, url string) error
 }
 
 type analytics interface {
@@ -111,6 +112,7 @@ func (s *Server) routes() {
 	api.GET("/monitors/:id/stats", s.handleMonitorStats)
 	api.PUT("/me/telegram", s.handleSetTelegram)
 	api.PUT("/me/notification-email", s.handleSetNotificationEmail)
+	api.PUT("/me/webhook", s.handleSetWebhookURL)
 }
 
 func (s *Server) Start(addr string) error {
@@ -513,4 +515,23 @@ func (s *Server) RegisterMetrics(meter metric.Meter) error {
 	}
 	s.echo.Use(s.metricsMiddleware)
 	return nil
+}
+
+type setWebhookURLRequest struct {
+	URL string `json:"url"`
+}
+
+func (s *Server) handleSetWebhookURL(c echo.Context) error {
+	var req setWebhookURLRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	if req.URL == "" || (!strings.HasPrefix(req.URL, "http://") && !strings.HasPrefix(req.URL, "https://")) {
+		return echo.NewHTTPError(http.StatusBadRequest, "valid http(s) url is required")
+	}
+
+	if err := s.store.UpdateUserWebhookURL(c.Request().Context(), userIDFrom(c), req.URL); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "could not update webhook url")
+	}
+	return c.NoContent(http.StatusNoContent)
 }

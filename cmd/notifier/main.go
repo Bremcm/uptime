@@ -41,6 +41,7 @@ func main() {
 
 	telegram := notifier.NewTelegram(cfg.TelegramToken)
 	email := notifier.NewEmail(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.SMTPFrom)
+	webhook := notifier.NewWebhook()
 
 	redisClient, err := redis.New(ctx, cfg.RedisAddr)
 	if err != nil {
@@ -83,7 +84,12 @@ func main() {
 				sendErr = err
 			}
 		}
-
+		if event.WebhookURL != "" {
+			if err := webhook.NotifyFromEvent(ctx, event); err != nil {
+				log.Error("failed to notify via webhook", "incident", event.IncidentID, "error", err)
+				sendErr = err
+			}
+		}
 		if sendErr != nil {
 			return sendErr
 		}
