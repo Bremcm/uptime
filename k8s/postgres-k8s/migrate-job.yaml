@@ -9,20 +9,11 @@ spec:
       restartPolicy: Never
       containers:
         - name: migrate
-          image: golang:1.26
-          command:
-            - /bin/sh
-            - -c
-            - |
-              go install github.com/pressly/goose/v3/cmd/goose@latest
-              goose -dir /migrations postgres "$DATABASE_URL" up
-          envFrom:
-            - secretRef:
-                name: common-secret
-          volumeMounts:
-            - name: migrations
-              mountPath: /migrations
-      volumes:
-        - name: migrations
-          configMap:
-            name: migrations-sql
+          image: deployments-migrate:latest
+          imagePullPolicy: Never
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: common-secret
+                  key: DATABASE_URL
