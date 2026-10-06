@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 	"time"
 
@@ -103,4 +104,103 @@ func TestUserChannelsRoundTrip(t *testing.T) {
 			t.Errorf("%s: WebhookURL = %q, want %q", name, u.WebhookURL, "https://hooks.example.com/x")
 		}
 	}
+}
+
+func TestMonitorUpdateDelete(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+
+	owner, err := store.CreateUser(ctx, "owner@example.com", "hash")
+	if err != nil {
+		t.Fatalf("create owner: %v", err)
+	}
+	other, err := store.CreateUser(ctx, "other@example.com", "hash")
+	if err != nil {
+		t.Fatalf("create other: %v", err)
+	}
+
+	mon, err := store.CreateMonitor(ctx, domain.Monitor{
+		UserID: owner.ID, Name: "orig", URL: "https://orig.com", IntervalSeconds: 300, Enabled: true,
+	})
+	if err != nil {
+		t.Fatalf("create monitor: %v", err)
+	}
+
+	t.Run("update by owner changes fields", func(t *testing.T) {
+		upd := mon
+		upd.Name = "renamed"
+		upd.URL = "https://new.com"
+		upd.IntervalSeconds = 600
+		upd.Enabled = false
+
+		if err := store.UpdateMonitor(ctx, upd); err != nil {
+			t.Fatalf("update: %v", err)
+		}
+		got, err := store.MonitorByID(ctx, mon.ID)
+		if err != nil {
+			t.Fatalf("read back: %v", err)
+		}
+		if got.Name != "renamed" || got.URL != "https://new.com" || got.IntervalSeconds != 600 || got.Enabled {
+			t.Errorf("unexpected state after update: %+v", got)
+		}
+	})
+
+	t.Run("update by another user is rejected and changes nothing", func(t *testing.T) {
+		hijack := mon
+		hijack.UserID = other.ID
+		hijack.Name = "hijacked"
+
+		err := store.UpdateMonitor(ctx, hijack)
+		if !errors.Is(err, ErrMonitorNotFound) {
+			t.Fatalf("err = %v, want ErrMonitorNotFound", err)
+		}
+		got, _ := store.MonitorByID(ctx, mon.ID)
+		if got.Name == "hijacked" {
+			t.Errorf("another user's update was applied")
+		}
+	})
+
+	t.Run("delete by another user is rejected and monitor survives", func(t *testing.T) {
+		err := store.DeleteMonitor(ctx, mon.ID, other.ID)
+		if !errors.Is(err, ErrMonitorNotFound) {
+			t.Fatalf("err = %v, want ErrMonitorNotFound", err)
+		}
+		if _, err := store.MonitorByID(ctx, mon.ID); err != nil {
+			t.Errorf("monitor should still exist: %v", err)
+		}
+	})
+
+	t.Run("delete by owner cascades to checks and incidents", func(t *testing.T) {
+		if err := store.SaveCheck(ctx, domain.Check{
+			MonitorID: mon.ID, Status: domain.StatusDown, CheckedAt: time.Now(),
+		}); err != nil {
+			t.Fatalf("save check: %v", err)
+		}
+		if _, err := store.CreateIncident(ctx, mon.ID); err != nil {
+			t.Fatalf("create incident: %v", err)
+		}
+
+		if err := store.DeleteMonitor(ctx, mon.ID, owner.ID); err != nil {
+			t.Fatalf("delete: %v", err)
+		}
+		if _, err := store.MonitorByID(ctx, mon.ID); !errors.Is(err, ErrMonitorNotFound) {
+			t.Errorf("monitor should be gone, err = %v", err)
+		}
+		checks, err := store.RecentChecks(ctx, mon.ID, 10)
+		if err != nil {
+			t.Fatalf("recent checks: %v", err)
+		}
+		if len(checks) != 0 {
+			t.Errorf("checks should be cascaded away, got %d", len(checks))
+		}
+		if _, err := store.OpenIncidentByMonitor(ctx, mon.ID); !errors.Is(err, ErrIncidentNotFound) {
+			t.Errorf("incident should be cascaded away, err = %v", err)
+		}
+	})
+
+	t.Run("delete of a missing monitor returns not found", func(t *testing.T) {
+		if err := store.DeleteMonitor(ctx, 999999, owner.ID); !errors.Is(err, ErrMonitorNotFound) {
+			t.Errorf("err = %v, want ErrMonitorNotFound", err)
+		}
+	})
 }
