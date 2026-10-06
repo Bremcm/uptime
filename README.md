@@ -109,6 +109,19 @@ Manifests are organized per service (`k8s/<service>-k8s/`) and include:
 
 Secrets are excluded from git (`k8s/**/secret.yaml` is gitignored); only `.example` templates are committed.
 
+## Testing
+
+```bash
+go test -short ./...   # fast unit tests, no Docker needed
+go test ./...          # also runs integration tests (requires Docker)
+```
+
+Tests are layered by cost and by what they can actually catch:
+
+- **Business logic** (`Detector.Process`): table-driven unit tests with in-memory fakes for the store and the Kafka publisher. Covers incident threshold, resolution, and the "no notification channel configured" path.
+- **HTTP handlers** (`handleCreateMonitor`): table-driven tests via `httptest`, with the store, billing client, and cache faked through embedded interfaces. Covers validation, plan limits, and minimum interval.
+- **Storage** (`internal/storage`): an integration test against a real Postgres started by testcontainers, with the project's actual goose migrations applied. Mocks cannot catch SQL/schema drift (for example a column added by a migration but missing from a `SELECT`), so this layer runs against the real database.
+
 ## API overview
 
 - POST /api/v1/auth/register
@@ -119,5 +132,6 @@ Secrets are excluded from git (`k8s/**/secret.yaml` is gitignored); only `.examp
 - GET /api/v1/monitors/:id/stats # hourly latency/uptime from ClickHouse
 - POST /api/v1/billing/checkout # Stripe Checkout Session
 - POST /webhooks/stripe
+
 
 
