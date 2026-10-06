@@ -39,6 +39,8 @@ type store interface {
 	CountEnabledMonitors(ctx context.Context) (int64, error)
 	UpdateUserNotificationEmail(ctx context.Context, userID int64, email string) error
 	UpdateUserWebhookURL(ctx context.Context, userID int64, url string) error
+	UpdateMonitor(ctx context.Context, m domain.Monitor) error
+	DeleteMonitor(ctx context.Context, id, userID int64) error
 }
 
 type analytics interface {
@@ -106,6 +108,9 @@ func (s *Server) routes() {
 	api.Use(s.authMiddleware)
 	api.Use(s.rateLimitMiddleware)
 	api.POST("/monitors", s.handleCreateMonitor)
+	api.GET("/monitors/:id", s.handleGetMonitor)
+	api.PATCH("/monitors/:id", s.handleUpdateMonitor)
+	api.DELETE("/monitors/:id", s.handleDeleteMonitor)
 	api.POST("/billing/checkout", s.handleCreateCheckout)
 	api.GET("/monitors", s.handleListMonitors)
 	api.GET("/monitors/:id/checks", s.handleMonitorChecks)
@@ -147,6 +152,11 @@ func (s *Server) handleCreateMonitor(c echo.Context) error {
 	if req.URL == "" || req.Name == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "name and url are required")
 	}
+
+	if !strings.HasPrefix(req.URL, "http://") && !strings.HasPrefix(req.URL, "https://") {
+		return echo.NewHTTPError(http.StatusBadRequest, "valid http(s) url is required")
+	}
+
 	if req.IntervalSeconds < 30 {
 		req.IntervalSeconds = 300
 	}
@@ -180,6 +190,109 @@ func (s *Server) handleCreateMonitor(c echo.Context) error {
 	_ = s.cache.Del(ctx, key)
 
 	return c.JSON(http.StatusCreated, toMonitorResponse(m))
+}
+
+func (s *Server) handleGetMonitor(c echo.Context) error {
+	m, err := s.ownedMonitor(c)
+	if err != nil {
+		return err
+	}
+	return c.JSON(http.StatusOK, toMonitorResponse(m))
+}
+
+type updateMonitorRequest struct {
+	Name            *string `json:"name"`
+	URL             *string `json:"url"`
+	IntervalSeconds *int    `json:"interval_seconds"`
+	Enabled         *bool   `json:"enabled"`
+}
+
+func (s *Server) handleUpdateMonitor(c echo.Context) error {
+	m, err := s.ownedMonitor(c)
+	if err != nil {
+		return err
+	}
+
+	var req updateMonitorRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+
+	if req.Name != nil {
+		if *req.Name == "" {
+			return echo.NewHTTPError(http.StatusBadRequest, "name cannot be empty")
+		}
+		m.Name = *req.Name
+	}
+	if req.URL != nil {
+		if !strings.HasPrefix(*req.URL, "http://") && !strings.HasPrefix(*req.URL, "https://") {
+			return echo.NewHTTPError(http.StatusBadRequest, "valid http(s) url is required")
+		}
+		m.URL = *req.URL
+	}
+	if req.IntervalSeconds != nil {
+		if *req.IntervalSeconds < 30 {
+			return echo.NewHTTPError(http.StatusBadRequest, "interval must be at least 30 seconds")
+		}
+		m.IntervalSeconds = *req.IntervalSeconds
+	}
+	if req.Enabled != nil {
+		m.Enabled = *req.Enabled
+	}
+
+	ctx := c.Request().Context()
+	if req.IntervalSeconds != nil {
+		if limits, err := s.billing.GetLimits(ctx, m.UserID); err == nil && m.IntervalSeconds < limits.MinIntervalSeconds {
+			return echo.NewHTTPError(http.StatusForbidden, fmt.Sprintf("minimum interval for your plan is %d seconds", limits.MinIntervalSeconds))
+		}
+	}
+
+	if err := s.store.UpdateMonitor(ctx, m); err != nil {
+		if errors.Is(err, storage.ErrMonitorNotFound) {
+			return echo.NewHTTPError(http.StatusNotFound, "monitor not found")
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, "could not update monitor")
+	}
+
+	_ = s.cache.Del(ctx, fmt.Sprintf("monitors:user:%d", m.UserID))
+	return c.JSON(http.StatusOK, toMonitorResponse(m))
+}
+
+func (s *Server) handleDeleteMonitor(c echo.Context) error {
+	m, err := s.ownedMonitor(c)
+	if err != nil {
+		return err
+	}
+
+	ctx := c.Request().Context()
+	if err := s.store.DeleteMonitor(ctx, m.ID, m.UserID); err != nil {
+		if errors.Is(err, storage.ErrMonitorNotFound) {
+			return echo.NewHTTPError(http.StatusNotFound, "monitor not found")
+		}
+		return echo.NewHTTPError(http.StatusInternalServerError, "could not delete monitor")
+	}
+
+	_ = s.cache.Del(ctx, fmt.Sprintf("monitors:user:%d", m.UserID))
+	return c.NoContent(http.StatusNoContent)
+}
+
+func (s *Server) ownedMonitor(c echo.Context) (domain.Monitor, error) {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return domain.Monitor{}, echo.NewHTTPError(http.StatusBadRequest, "invalid monitor id")
+	}
+
+	m, err := s.store.MonitorByID(c.Request().Context(), id)
+	if err != nil {
+		if errors.Is(err, storage.ErrMonitorNotFound) {
+			return domain.Monitor{}, echo.NewHTTPError(http.StatusNotFound, "monitor not found")
+		}
+		return domain.Monitor{}, echo.NewHTTPError(http.StatusInternalServerError, "could not load monitor")
+	}
+	if m.UserID != userIDFrom(c) {
+		return domain.Monitor{}, echo.NewHTTPError(http.StatusNotFound, "monitor not found")
+	}
+	return m, nil
 }
 
 func (s *Server) handleListMonitors(c echo.Context) error {

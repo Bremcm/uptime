@@ -53,6 +53,35 @@ func (s *Store) CreateMonitor(ctx context.Context, m domain.Monitor) (domain.Mon
 	return m, nil
 }
 
+func (s *Store) UpdateMonitor(ctx context.Context, m domain.Monitor) error {
+	const q = `
+		UPDATE monitors
+		SET name = $1, url = $2, interval_seconds = $3, enabled = $4
+		WHERE id = $5 AND user_id = $6`
+
+	tag, err := s.pool.Exec(ctx, q, m.Name, m.URL, m.IntervalSeconds, m.Enabled, m.ID, m.UserID)
+	if err != nil {
+		return fmt.Errorf("update monitor: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrMonitorNotFound
+	}
+	return nil
+}
+
+func (s *Store) DeleteMonitor(ctx context.Context, id, userID int64) error {
+	const q = `DELETE FROM monitors WHERE id = $1 AND user_id = $2`
+
+	tag, err := s.pool.Exec(ctx, q, id, userID)
+	if err != nil {
+		return fmt.Errorf("delete monitor: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrMonitorNotFound
+	}
+	return nil
+}
+
 func (s *Store) MonitorsByUser(ctx context.Context, userID int64) ([]domain.Monitor, error) {
 	const q = `
 		SELECT id, user_id, name, url, interval_seconds, enabled, created_at
