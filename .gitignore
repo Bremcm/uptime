@@ -24,3 +24,7 @@ __pycache__/
 .vscode
 
 probe.py
+
+cli/.venv/
+*.egg-info/
+__pycache__/
